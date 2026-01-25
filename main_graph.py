@@ -182,7 +182,7 @@ workflow.add_conditional_edges(
 
 
 if __name__ == "__main__":
-    DB_URI = os.getenv("DB_URI")
+    DB_URI = os.getenv("POSTGRES_URI")
     with ConnectionPool(DB_URI) as pool:
         # 1) 初始化PgSaver
         checkpointer = PostgresSaver(pool)
