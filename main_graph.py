@@ -12,6 +12,7 @@ import uuid
 
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
+from prompts import route_prompt, direct_answer_prompt
 
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
@@ -33,6 +34,7 @@ class PlanExecuteState(TypedDict):
     plan: List[str]  # 待执行的任务列表
     past_steps: Annotated[List[Tuple], operator.add]  # 已完成的步骤（步骤名，结果）
     response: str  # 最终回复
+    route: str # 路由意图
 
 
 class Plan(BaseModel):
@@ -44,6 +46,36 @@ class Response(BaseModel):
     """（结构化输出）重新规划或结束"""
     response: str = Field(description="最终回答，如果还需要继续执行步骤，则为空字符串")
     next_plan: List[str] = Field(description="剩余未完成的步骤列表")
+
+def router_node(state: PlanExecuteState):
+    """路由节点：判断意图"""
+    logger.info("🚀路由师正在判断意图")
+    question = state["question"]
+
+    prompt = route_prompt.format(user_request=question)
+    raw = llm.invoke(prompt)
+    try:
+        data = parse_llm_json(raw.content)
+        route = str(data.get("route", "")).strip()
+    except Exception as e:
+        logger.error(f"路由解析失败：{e}")
+        route = ""
+
+    if route not in {"planner", "direct_answer"}:
+        logger.info(f"路由结果无效，默认走 planner: {route}")
+        route = "planner"
+
+    logger.info(f"用户意图：{route}")
+    return {"route": route}
+
+
+def direct_answer_node(state: PlanExecuteState):
+    """直接回答：无需工具"""
+    logger.info("🚀直接回答中")
+    question = state["question"]
+    prompt = direct_answer_prompt.format(user_request=question)
+    raw = llm.invoke(prompt)
+    return {"response": raw.content}
 
 
 def planner_node(state: PlanExecuteState):
@@ -124,7 +156,9 @@ def reflect_node(state: PlanExecuteState):
     system_prompt = (
         "你是一个任务调度系统。仅输出 JSON。字段：response(string)、next_plan(string[])。\n"
         "当信息足够时，将 next_plan 设为空数组，并在 response 中给出最终 Markdown 回答；\n"
-        "当信息不足时，response 设为空字符串，并更新 next_plan（字符串数组）。\n"
+        "当信息不足时，response 设为空字符串。优先保留当前计划，只在必要时调整。\n"
+        "如需继续执行，next_plan 应尽量等于当前计划中尚未完成的部分；\n"
+        "只有在现有步骤明显错误或缺少关键步骤时才允许修改，并且最多新增 1-2 个步骤。\n"
         "不要任何额外文本或解释。"
     )
 
@@ -155,6 +189,11 @@ def reflect_node(state: PlanExecuteState):
         return {"plan": result.next_plan}
 
 
+def route_by_intent(state: PlanExecuteState):
+    route = state.get("route")
+    return route if route in {"planner", "direct_answer"} else "planner"
+
+
 def should_end(state: PlanExecuteState):
     """判断流程是否需要结束"""
     if state.get('response'):
@@ -165,11 +204,22 @@ def should_end(state: PlanExecuteState):
 
 workflow = StateGraph(PlanExecuteState)
 
+workflow.add_node("router", router_node)
 workflow.add_node("planner", planner_node)
 workflow.add_node("executor", executor_node)
 workflow.add_node("reflect", reflect_node)
+workflow.add_node("direct_answer", direct_answer_node)
 
-workflow.add_edge(START, "planner")  # 开始 -> 规划
+workflow.add_edge(START, "router")
+workflow.add_conditional_edges(
+    "router", # 路由节点执行完，进行判断
+    route_by_intent, # 判断函数
+    {
+        "planner": "planner", # 函数的返回值是planner，则下一个节点是planner
+        "direct_answer": "direct_answer"
+    }
+)
+workflow.add_edge("direct_answer", END)
 workflow.add_edge("planner", "executor")  # 规划 -> 执行者
 workflow.add_edge("executor", "reflect")  # 执行者 -> 反思
 
@@ -200,7 +250,7 @@ if __name__ == "__main__":
         config = {"configurable": {"thread_id": uuid}}
 
         # 运行第一轮
-        question = "我想去洛阳玩两天，想去白马寺，小街天府，龙门石窟，给我两天的游玩计划。"
+        question = "特朗普多少岁了"
         state = {"question": question}
         logger.info("第一轮运行开始")
         for event in app.stream(state, config=config):
