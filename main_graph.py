@@ -12,6 +12,9 @@ from pydantic import BaseModel, Field
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
+
 load_dotenv()
 llm = ChatOpenAI(
     model="deepseek-chat",
@@ -46,8 +49,15 @@ def planner_node(state: PlanExecuteState):
     """接收用户问题，生成初始计划"""
     logger.info("🚀规划师正在规划任务")
     question = state["question"]
+
+    # 如果是多轮对话，past_steps其中会有之前的执行记录
+    past_steps_context = ""
+    if state.get("past_steps"):
+        past_info = "\n".join([f"步骤：{step}，结果摘要：{res[:50]}..." for step, res in state["past_steps"]])
+        past_steps_context = f"\n\n已知历史信息（不用重复查询）：\n{past_info}"
+
     system_prompt = "你是一个旅游规划专家。仅输出 JSON。字段：steps(string[])。不要任何额外文本或解释。"
-    user_prompt = f"用户需求：{question}"
+    user_prompt = f"用户需求：{question}{past_steps_context}"
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
@@ -117,7 +127,7 @@ def replanner_node(state: PlanExecuteState):
 
     user_prompt = (
         f"原始目标：{state['question']}\n"
-        f"已完成步骤：{past_steps_str}\n"
+        f"历史：{past_steps_str}\n"
         f"当前计划：{current_plan_str}\n"
     )
 
@@ -169,19 +179,32 @@ workflow.add_conditional_edges(
     }
 )
 
-app = workflow.compile()
+
 
 if __name__ == "__main__":
-    question = "我想去洛阳玩两天，想去白马寺，小街天府，龙门石窟，给我两天的游玩计划。"
-    state = {"question": question}
+    DB_URI = os.getenv("DB_URI")
+    with ConnectionPool(DB_URI) as pool:
+        # 1) 初始化PgSaver
+        checkpointer = PostgresSaver(pool)
 
-    for event in app.stream(state):
-        # event是一个字典，key是节点名称，value是该节点输出的state
-        for node_name, node_state in event.items():
-            # 因为已经在节点中处理了日志，这里不需要重复打印
+        # 2) 首次运行，必须执行 setup()，它会自动在库里创建两张表（checkpoints、checkpoint_writes）
+        checkpointer.setup()
+
+        app = workflow.compile(checkpointer=checkpointer)
+
+        config = {"configurable": {"thread_id": "1"}}
+
+        # 运行第一轮
+        question = "我想去洛阳玩两天，想去白马寺，小街天府，龙门石窟，给我两天的游玩计划。"
+        state = {"question": question}
+        logger.info("第一轮运行开始")
+        for event in app.stream(state):
             pass
 
-    # 获取最终回答
-    final_response = node_state['response']
-    logger.info(f"问题：{question}")
-    logger.info(f"最终回答：{final_response}")
+        # 运行第二轮（测试记忆）
+        logger.info("第二轮运行开始")
+        new_question = "刚才说的小街天府，有什么好吃的"
+        app.update_state(config, {"question": new_question, "response": ""})
+        # 传入None，表示延续状态
+        for event in app.stream(None, config=config):
+            pass
