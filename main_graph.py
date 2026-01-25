@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_tavily import TavilySearch
 from langgraph.graph import END, StateGraph, START
 from pydantic import BaseModel, Field
+import uuid
 
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
@@ -106,22 +107,24 @@ def executor_node(state: PlanExecuteState):
     logger.info(f"搜索结果长度为：{len(result_str)}")
 
     return {
-        "past_steps": [(task, result_str)]
+        "past_steps": [(task, result_str)],
+        "plan": plan[1:] # 剔除第一个任务
     }
 
 
-def replanner_node(state: PlanExecuteState):
+def reflect_node(state: PlanExecuteState):
     """重新规划器：根据执行结果，判断是否需要重新规划"""
     logger.info(f"🚀重新规划师正在判断是否需要重新规划")
     past_steps_str = ""
     for step, result in state['past_steps']:
         past_steps_str += f"已完成步骤：{step}\n执行结果：{result}\n"
+
     current_plan_str = "\n".join(state['plan'])
 
     system_prompt = (
         "你是一个任务调度系统。仅输出 JSON。字段：response(string)、next_plan(string[])。\n"
         "当信息足够时，将 next_plan 设为空数组，并在 response 中给出最终 Markdown 回答；\n"
-        "当信息不足时，response 设为空字符串，更新 next_plan（字符串数组）。\n"
+        "当信息不足时，response 设为空字符串，并更新 next_plan（字符串数组）。\n"
         "不要任何额外文本或解释。"
     )
 
@@ -148,6 +151,7 @@ def replanner_node(state: PlanExecuteState):
         return {"response": result.response, "plan": []}
     else:
         logger.info(f"重新规划师决策：继续执行，剩余计划：{len(result.next_plan)}个步骤")
+        logger.info(f"剩余计划：{result.next_plan}")
         return {"plan": result.next_plan}
 
 
@@ -163,15 +167,15 @@ workflow = StateGraph(PlanExecuteState)
 
 workflow.add_node("planner", planner_node)
 workflow.add_node("executor", executor_node)
-workflow.add_node("replanner", replanner_node)
+workflow.add_node("reflect", reflect_node)
 
 workflow.add_edge(START, "planner")  # 开始 -> 规划
 workflow.add_edge("planner", "executor")  # 规划 -> 执行者
-workflow.add_edge("executor", "replanner")  # 执行者 -> 反思
+workflow.add_edge("executor", "reflect")  # 执行者 -> 反思
 
 # 添加条件分支
 workflow.add_conditional_edges(
-    "replanner",  # 从反思节点出来
+    "reflect",  # 从反思节点出来
     should_end,  # 判断是否结束
     {
         True: END,  # 如果返回 True，流程结束
@@ -182,6 +186,7 @@ workflow.add_conditional_edges(
 
 
 if __name__ == "__main__":
+    uuid = uuid.uuid4().hex
     DB_URI = os.getenv("POSTGRES_URI")
     with ConnectionPool(DB_URI) as pool:
         # 1) 初始化PgSaver
@@ -192,14 +197,19 @@ if __name__ == "__main__":
 
         app = workflow.compile(checkpointer=checkpointer)
 
-        config = {"configurable": {"thread_id": "1"}}
+        config = {"configurable": {"thread_id": uuid}}
 
         # 运行第一轮
         question = "我想去洛阳玩两天，想去白马寺，小街天府，龙门石窟，给我两天的游玩计划。"
         state = {"question": question}
         logger.info("第一轮运行开始")
-        for event in app.stream(state):
+        for event in app.stream(state, config=config):
             pass
+        # 输出最终回答
+        final_state = app.get_state(config)
+        final_response = final_state.values.get('response', '')
+        logger.info(f"问题：{question}")
+        logger.info(f"最终回答：{final_response}")
 
         # 运行第二轮（测试记忆）
         logger.info("第二轮运行开始")
@@ -208,3 +218,8 @@ if __name__ == "__main__":
         # 传入None，表示延续状态
         for event in app.stream(None, config=config):
             pass
+        # 输出最终回答
+        final_state = app.get_state(config)
+        final_response = final_state.values.get('response', '')
+        logger.info(f"问题：{question}")
+        logger.info(f"最终回答：{final_response}")
