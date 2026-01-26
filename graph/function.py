@@ -20,5 +20,5 @@ def abstract(content: str):
     response = llm.invoke(summary_prompt.format(search_results=content))
     summary = parse_llm_json(response.content).get('summary', '')
     from utils.logger_util import logger
-    logger.info(f"摘要内容为: {summary}")
+    logger.info(f"搜索结果摘要内容为: {summary}")
     return summary
