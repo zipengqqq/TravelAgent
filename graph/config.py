@@ -25,6 +25,7 @@ class PlanExecuteState(TypedDict):
     past_steps: Annotated[List[Tuple], operator.add]  # 已完成的步骤（步骤名，结果）
     response: str  # 最终回复
     route: str # 路由意图
+    messages: Annotated[List[Tuple], operator.add] # 对话历史
 
 
 class Plan(BaseModel):

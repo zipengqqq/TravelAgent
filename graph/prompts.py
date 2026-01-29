@@ -3,8 +3,18 @@ route_prompt = """
 
 ## 意图分类
 只有两种意图：
-- planner: 用户提出的问题需要多步推理、制定计划、或必须通过外部搜索/工具调用才能回答（例如查询天气、航班、新闻、做旅行规划等）。
-- direct_answer: 用户仅进行闲聊（如“你好”）、表达情绪、确认已知信息，或问题可直接基于常识/已有知识回答，无需联网或复杂处理。
+- planner: 用户明确要求“做规划/制定计划/安排步骤/输出行程或待办清单”。
+  - 典型表达：规划、制定计划、安排一下、做个行程、路线怎么走、几天怎么玩、给我一个步骤清单。
+  - 注意：只有出现“要一个计划/行程/步骤”的诉求才选 planner。
+- direct_answer: 除 planner 以外的所有情况。
+  - 包括：闲聊、情绪表达、常识问答、解释概念、给建议、以及基于对话历史的回顾/总结/确认/列举。
+  - 关键规则：如果用户在问“刚才/之前/上面/你提到过/我们聊到的……是什么”，这是在引用对话历史，不是在要规划，一律选 direct_answer。
+
+## 示例
+- 用户：刚才提到了哪些美食？ -> direct_answer
+- 用户：你前面推荐的餐厅有哪些？ -> direct_answer
+- 用户：给我规划下周去成都三天的行程 -> planner
+- 用户：去成都有哪些必吃美食？ -> direct_answer
 
 ## 输出格式
 输出格式为JSON，字段为route（字符串）
@@ -14,7 +24,11 @@ route_prompt = """
 """
 
 direct_answer_prompt = """
+请回答当前问题：
 {user_request}
+
+对话历史为：
+{messages}
 """
 
 planner_prompt = """
@@ -30,8 +44,11 @@ planner_prompt = """
 
 不要包含任何额外文本、解释、注释或 Markdown。
 
-## 用户需求
-{user_request}{past_steps_context}
+## 用户问题
+{user_request}
+
+## 对话历史
+{messages}
 """
 
 search_query_prompt = """

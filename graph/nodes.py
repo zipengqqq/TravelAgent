@@ -14,7 +14,8 @@ def router_node(state: PlanExecuteState):
     question = state["question"]
 
     prompt = route_prompt.format(user_request=question)
-    raw = llm.invoke(prompt)
+    router_llm = llm.bind(temperature=0.0)
+    raw = router_llm.invoke(prompt)
     try:
         data = parse_llm_json(raw.content)
         route = str(data.get("route", "")).strip()
@@ -23,8 +24,8 @@ def router_node(state: PlanExecuteState):
         route = ""
 
     if route not in {"planner", "direct_answer"}:
-        logger.info(f"路由结果无效，默认走 planner: {route}")
-        route = "planner"
+        logger.info(f"路由结果无效，默认走 direct_answer: {route}")
+        route = "direct_answer"
 
     logger.info(f"用户意图：{route}")
     return {"route": route}
@@ -34,9 +35,13 @@ def direct_answer_node(state: PlanExecuteState):
     """直接回答：无需工具"""
     logger.info("🚀直接回答中")
     question = state["question"]
-    prompt = direct_answer_prompt.format(user_request=question)
+
+    # 格式化对话历史
+    messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
+
+    prompt = direct_answer_prompt.format(user_request=question, messages=messages)
     raw = llm.invoke(prompt)
-    return {"response": raw.content}
+    return {"response": raw.content, "messages": [("user", question), ("assistant", raw.content)]}
 
 
 def planner_node(state: PlanExecuteState):
@@ -44,13 +49,10 @@ def planner_node(state: PlanExecuteState):
     logger.info("🚀规划师正在规划任务")
     question = state["question"]
 
-    # 如果是多轮对话，past_steps其中会有之前的执行记录
-    past_steps_context = ""
-    if state.get("past_steps"):
-        past_info = "\n".join([f"步骤：{step}，结果摘要：{res[:50]}..." for step, res in state["past_steps"]])
-        past_steps_context = f"\n\n已知历史信息（不用重复查询）：\n{past_info}"
+    # 格式化对话历史
+    messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
 
-    prompt = planner_prompt.format(user_request=question, past_steps_context=past_steps_context)
+    prompt = planner_prompt.format(user_request=question, messages=messages)
 
     raw = llm.invoke(prompt)
     try:
@@ -61,6 +63,7 @@ def planner_node(state: PlanExecuteState):
     except Exception as e:
         logger.error(f"规划解析失败：{e}")
         steps = []
+    logger.info(f"共有 {len(steps)} 个步骤")
     return {"plan": steps}
 
 
@@ -124,7 +127,7 @@ def reflect_node(state: PlanExecuteState):
 
     if result.response and result.response.strip() != "":
         logger.info("任务完成，生成最终回答。")
-        return {"response": result.response, "plan": []}
+        return {"response": result.response, "plan": [], "messages": [("user", state['question']), ("assistant", result.response)]}
     else:
         logger.info(f"重新规划师决策：继续执行，剩余计划：{len(result.next_plan)}个步骤")
         logger.info(f"剩余计划：{result.next_plan}")

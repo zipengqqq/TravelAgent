@@ -22,7 +22,7 @@ if __name__ == "__main__":
         config = {"configurable": {"thread_id": uuid}}
 
         # 运行第一轮
-        question = "我想去洛阳玩两天"
+        question = "我想逛北京一天，给我制定一个计划，只有四个节点"
         state = {"question": question}
         logger.info("第一轮运行开始")
         for event in app.stream(state, config=config):
@@ -34,14 +34,14 @@ if __name__ == "__main__":
         logger.info(f"最终回答：{final_response}")
 
         # # 运行第二轮（测试记忆）
-        # logger.info("第二轮运行开始")
-        # new_question = "刚才提到了哪些美食"
-        # app.update_state(config, {"question": new_question, "response": ""})
-        # # 传入None，表示延续状态
-        # for event in app.stream(None, config=config):
-        #     pass
-        # # 输出最终回答
-        # final_state = app.get_state(config)
-        # final_response = final_state.values.get('response', '')
-        # logger.info(f"问题：{question}")
-        # logger.info(f"最终回答：{final_response}")
+        logger.info("第二轮运行开始")
+        new_question = "刚才提到了哪些美食"
+        app.update_state(config, {"question": new_question, "response": ""})
+        # 传入None，表示延续状态
+        for event in app.stream(None, config=config):
+            pass
+        # 输出最终回答
+        final_state = app.get_state(config)
+        final_response = final_state.values.get('response', '')
+        logger.info(f"问题：{question}")
+        logger.info(f"最终回答：{final_response}")
