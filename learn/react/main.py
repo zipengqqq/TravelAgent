@@ -19,6 +19,7 @@ llm = ChatOpenAI(
 )
 
 STOP_SEQS = ["\nObservation:", "Observation:"]
+# stop 参数，会在生成指定内容前，停止大模型继续生成，把前面已经生成的内容返回
 llm_step = llm.bind(stop=STOP_SEQS)
 
 # 2. 定义简单的工具
@@ -96,12 +97,14 @@ def _strip_wrapping_quotes(text: str) -> str:
 
 
 def _extract_final_answer(text: str) -> str | None:
+    """提取最终答案"""
     if "Final Answer:" not in text:
         return None
     return text.rsplit("Final Answer:", 1)[-1].strip() or None
 
 
 def _extract_last_action(text: str) -> tuple[str, str] | None:
+    """提取最后一个 Action 及其输入"""
     actions = re.findall(r"^Action:\s*(.+)\s*$", text, flags=re.MULTILINE)
     inputs = re.findall(r"^Action Input:\s*(.+)\s*$", text, flags=re.MULTILINE)
     if not actions or not inputs:
@@ -116,23 +119,23 @@ def react_agent(question: str) -> str:
     max_steps = 5
     for i in range(max_steps):
         logger.info(f"[Step {i + 1}] 正在思考...")
-
-
         response = llm_step.invoke(prompt).content.strip()
-        logger.info(f"LLM 回复:\n{response}")
 
         prompt = prompt.rstrip() + "\n" + response.rstrip() + "\n"
 
+        # 提取最终答案
         final_answer = _extract_final_answer(response)
         if final_answer:
             return final_answer
 
+        # 提取最后一个 Action 及其输入
         parsed = _extract_last_action(response)
         if not parsed:
             prompt += "Observation: 解析失败，请严格按 ReAct 格式输出 Action/Action Input 或 Final Answer\n"
             continue
 
         action_name, action_input = parsed
+        # 获取对应工具
         tool = tools.get(action_name)
         if not tool:
             prompt += f"Observation: 错误：找不到工具 {action_name}\n"
@@ -142,12 +145,11 @@ def react_agent(question: str) -> str:
         observation = tool(action_input)
         logger.info(f"--> 工具输出: {observation}")
         prompt += f"Observation: {observation}\n"
-        logger.info(f"提示词是\n{prompt}")
 
     return "达到最大步骤数，未能找到答案。"
 
 if __name__ == "__main__":
     # 测试案例
-    question = "北京现在的天气怎么样？如果我在那里买 3 件 99 元的T恤，一共要花多少钱？"
+    question = "北京现在的天气怎么样？如果我在那里买 6 件 99 元的T恤，一共要花多少钱？"
     answer = react_agent(question)
     logger.info(f"\n====== 最终答案 ======\n{answer}")
