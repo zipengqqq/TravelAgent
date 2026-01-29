@@ -104,7 +104,7 @@ def executor_node(state: PlanExecuteState):
 
 def reflect_node(state: PlanExecuteState):
     """重新规划器：根据执行结果，判断是否需要重新规划"""
-    logger.info(f"🚀重新规划师正在判断是否需要重新规划")
+    logger.info(f"🚀反思节点正在判断是否需要重新规划")
     past_steps_str = ""
     for step, result in state['past_steps']:
         past_steps_str += f"已完成步骤：{step}\n执行结果：{result}\n"
@@ -120,15 +120,16 @@ def reflect_node(state: PlanExecuteState):
     raw = llm.invoke(prompt)
     try:
         data = parse_llm_json(raw.content)
+        logger.info(f"大模型结果为：{data}")
         result = Response.model_validate(data)
     except Exception as e:
-        logger.error(f"重新规划解析失败：{e}")
+        logger.error(f"反思节点解析失败：{e}")
         result = Response(response="", next_plan=[])
 
     if result.response and result.response.strip() != "":
         logger.info("任务完成，生成最终回答。")
         return {"response": result.response, "plan": [], "messages": [("user", state['question']), ("assistant", result.response)]}
     else:
-        logger.info(f"重新规划师决策：继续执行，剩余计划：{len(result.next_plan)}个步骤")
+        logger.info(f"反思节点决策：继续执行，剩余计划：{len(result.next_plan)}个步骤")
         logger.info(f"剩余计划：{result.next_plan}")
         return {"plan": result.next_plan}

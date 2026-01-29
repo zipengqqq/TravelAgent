@@ -22,7 +22,7 @@ if __name__ == "__main__":
         config = {"configurable": {"thread_id": uuid}}
 
         # 运行第一轮
-        question = "我想逛北京一天，给我制定一个计划，只有四个节点"
+        question = "我想逛北京一天，给我制定一个计划，只有两个节点"
         state = {"question": question}
         logger.info("第一轮运行开始")
         for event in app.stream(state, config=config):
