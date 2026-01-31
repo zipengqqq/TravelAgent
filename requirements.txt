@@ -1,7 +1,8 @@
-langgraph~=1.0.6
+uuid~=1.30
+langgraph~=1.0.7
 psycopg-pool~=3.3.0
 python-dotenv~=1.2.1
 langchain-openai~=1.1.7
-langsmith~=0.1.0
-pydantic~=2.12.4
+pydantic~=2.12.5
 loguru~=0.7.3
+langsmith~=0.6.6

@@ -8,7 +8,7 @@ from graph.workflow import workflow
 from utils.logger_util import logger
 
 if __name__ == "__main__":
-    uuid = uuid.uuid4().hex
+    thread_id = uuid.uuid4().hex
     DB_URI = os.getenv("POSTGRES_URI")
     with ConnectionPool(DB_URI) as pool:
         # 1) 初始化PgSaver
@@ -19,11 +19,20 @@ if __name__ == "__main__":
 
         app = workflow.compile(checkpointer=checkpointer)
 
-        config = {"configurable": {"thread_id": uuid}}
+        # thread_id 不变即可从数据库续上同一会话的状态（短期记忆）
+        config = {"configurable": {"thread_id": thread_id}}
 
         # 运行第一轮
         question = "我想逛北京一天，给我制定一个计划，只有两个节点"
-        state = {"question": question}
+        # 首轮补齐字段；messages 作为对话历史
+        state = {
+            "question": question,
+            "plan": [],
+            "past_steps": [],
+            "response": "",
+            "route": "",
+            "messages": [],
+        }
         logger.info("第一轮运行开始")
         for event in app.stream(state, config=config):
             pass
@@ -36,12 +45,21 @@ if __name__ == "__main__":
         # # 运行第二轮（测试记忆）
         logger.info("第二轮运行开始")
         new_question = "刚才提到了哪些美食"
-        app.update_state(config, {"question": new_question, "response": ""})
-        # 传入None，表示延续状态
-        for event in app.stream(None, config=config):
+
+        new_state = {
+            "question": new_question,
+            "plan": [],
+            "past_steps": [],
+            "response": "",
+            "route": "",
+        }
+
+        # 新问题从 START 节点重新跑
+        for event in app.stream(new_state, config=config):
             pass
+
         # 输出最终回答
         final_state = app.get_state(config)
-        final_response = final_state.values.get('response', '')
-        logger.info(f"问题：{question}")
+        final_response = final_state.values.get("response", "")
+        logger.info(f"问题：{new_question}")
         logger.info(f"最终回答：{final_response}")
