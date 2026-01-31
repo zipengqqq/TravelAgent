@@ -1,12 +1,16 @@
 import json
 
+from entity.user_profiles_entity import UserProfile
 from graph.config import PlanExecuteState, tavily_tool, Response, Plan
 from graph.config import llm
 from graph.function import abstract
-from graph.prompts import route_prompt, direct_answer_prompt, planner_prompt, search_query_prompt, reflect_prompt
+from graph.prompts import route_prompt, direct_answer_prompt, planner_prompt, search_query_prompt, reflect_prompt, \
+    profile_prompt
+from utils.db_util import create_session
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
+OLD_PROFILE_NULL_MSG = "当前还未生成用户画像"
 
 def router_node(state: PlanExecuteState):
     """路由节点：判断意图"""
@@ -133,3 +137,50 @@ def reflect_node(state: PlanExecuteState):
         logger.info(f"反思节点决策：继续执行，剩余计划：{len(result.next_plan)}个步骤")
         logger.info(f"剩余计划：{result.next_plan}")
         return {"plan": result.next_plan}
+
+def profile_node(state: PlanExecuteState):
+    """用户画像节点：根据用户问题，生成用户画像"""
+    logger.info("🚀用户画像节点正在生成用户画像")
+    question = state["question"]
+
+    # 1) 获取旧画像
+    old_profile = None
+    with create_session() as session:
+        record = session.query(UserProfile).filter(
+            UserProfile.user_id == state["user_id"]
+        ).first()
+        if record:
+            old_profile = record.profiles
+            logger.info(f"用户旧画像：{old_profile}")
+    if not old_profile:
+        old_profile = OLD_PROFILE_NULL_MSG
+
+    # 2) 生成新画像
+    try:
+        conversation = f"用户问题：{state['question']}\nAI回答：{state.get('response', '')}"
+        prompt = profile_prompt.format(
+            old_profile=old_profile,
+            conversation_text=conversation,
+        )
+        response = llm.invoke(prompt)
+        data = parse_llm_json(response.content)
+        logger.info(f"用户画像节点生成用户画像：{data}")
+
+        # 3) 保存新画像
+        with create_session() as session:
+            if old_profile == OLD_PROFILE_NULL_MSG:
+                # 第一次生成画像
+                record = UserProfile(
+                    user_id=state["user_id"],
+                    profiles=data,
+                )
+                session.add(record)
+            else:
+                # 更新用户画像
+                session.query(UserProfile).filter(
+                    UserProfile.user_id == state["user_id"]
+                ).update({"profiles": data})
+    except Exception as e:
+        logger.error(f"用户画像节点保存用户画像失败：{e}")
+
+

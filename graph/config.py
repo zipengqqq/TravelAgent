@@ -26,6 +26,7 @@ class PlanExecuteState(TypedDict):
     response: str  # 最终回复
     route: str # 路由意图
     messages: Annotated[List[Tuple], operator.add] # 对话历史
+    user_id: int # 用户id，当前固定为1
 
 
 class Plan(BaseModel):
