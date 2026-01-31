@@ -141,7 +141,6 @@ def reflect_node(state: PlanExecuteState):
 def profile_node(state: PlanExecuteState):
     """用户画像节点：根据用户问题，生成用户画像"""
     logger.info("🚀用户画像节点正在生成用户画像")
-    question = state["question"]
 
     # 1) 获取旧画像
     old_profile = None

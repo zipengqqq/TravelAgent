@@ -10,7 +10,7 @@ from utils.logger_util import logger
 if __name__ == "__main__":
     thread_id = uuid.uuid4().hex
     DB_URI = os.getenv("POSTGRES_URI")
-    with ConnectionPool(DB_URI) as pool:
+    with ConnectionPool(DB_URI, kwargs={"autocommit": True}) as pool:
         # 1) 初始化PgSaver
         checkpointer = PostgresSaver(pool)
 

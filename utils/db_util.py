@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from utils.logger_util import logger
 
 load_dotenv()
-DATABASE_URI = os.getenv("DATABASE_URI")
+DATABASE_URI = os.getenv("POSTGRES_URI")
 engine = create_engine(
     DATABASE_URI,
     pool_pre_ping=True,
