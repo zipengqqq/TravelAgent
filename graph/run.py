@@ -8,7 +8,7 @@ from graph.workflow import workflow
 from utils.logger_util import logger
 
 if __name__ == "__main__":
-    thread_id = uuid.uuid4().hex
+    thread_id = '1'
     DB_URI = os.getenv("POSTGRES_URI")
     with ConnectionPool(DB_URI, kwargs={"autocommit": True}) as pool:
         # 1) 初始化PgSaver
@@ -32,6 +32,8 @@ if __name__ == "__main__":
             "response": "",
             "route": "",
             "messages": [],
+            "user_id": 1,
+            "memories": []
         }
         logger.info("第一轮运行开始")
         for event in app.stream(state, config=config):
@@ -52,6 +54,8 @@ if __name__ == "__main__":
             "past_steps": [],
             "response": "",
             "route": "",
+            "user_id": 1,
+            "memories": []
         }
 
         # 新问题从 START 节点重新跑

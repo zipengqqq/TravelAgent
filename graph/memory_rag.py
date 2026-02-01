@@ -1,6 +1,7 @@
 from typing import List
+import os
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from utils.db_util import create_session
 from utils.id_util import id_worker
@@ -12,9 +13,10 @@ class MemoryRAG:
     def __init__(self):
         # 使用本地免费模型 BAAI/bge-m3（中文效果好）
         # 首次运行会自动下载模型（约 2.2GB），之后就在本地运行
-        logger.info("初始化 MemoryRAG，使用 BAAI/bge-m3 嵌入模型")
+        logger.info("初始化 MemoryRAG，使用 BAAI/bge-m3 嵌入模型 (GPU)")
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-m3",
+            model_name="models/BAAI/bge-m3",  # 使用本地模型路径
+            model_kwargs={'device': 'cuda'},  # 使用 GPU
             encode_kwargs={'normalize_embeddings': True}  # 归一化有助于向量相似度计算
         )
 

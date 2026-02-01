@@ -27,6 +27,7 @@ class PlanExecuteState(TypedDict):
     route: str # 路由意图
     messages: Annotated[List[Tuple], operator.add] # 对话历史
     user_id: int # 用户id，当前固定为1
+    memories: List[str] # 长期记忆
 
 
 class Plan(BaseModel):
