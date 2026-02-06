@@ -1,7 +1,3 @@
-"""
-PostgreSQL MCP 服务器
-允许通过 MCP 协议查询 PostgreSQL 数据库
-"""
 import os
 from typing import Any
 import asyncio
@@ -17,7 +13,7 @@ DB_URI = os.getenv("POSTGRES_URI")
 # 创建 MCP 服务器实例
 server = Server("postgres-server")
 
-
+"""PostgreSQL MCP 服务器，允许通过 MCP 协议查询 PostgreSQL 数据库"""
 async def execute_query(query: str) -> list[dict[str, Any]]:
     """执行 PostgreSQL 查询"""
     if not DB_URI:
