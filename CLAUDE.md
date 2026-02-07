@@ -32,7 +32,7 @@ python mcp_agent_demo.py
 
 # ReAct 模式示例
 cd learn/react
-python main.py
+python map.py
 
 # 持久化示例（各种状态管理模式）
 cd learn/persistence
