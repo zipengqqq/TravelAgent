@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TravelAgent 是一个基于 Python 的 AI 旅行规划智能体，使用 LangGraph 和 LLM 技术构建。项目展示了先进的 AI 智能体模式，包括规划-执行、多智能体系统、记忆管理和 MCP（模型上下文协议）集成。
 
+## 环境设置
+
+项目使用 conda 环境 `travel-agent`。**所有 Python 命令都必须在此环境中运行**。
+
+激活环境：
+```bash
+conda activate travel-agent
+```
+
+或者在 Git Bash 中：
+```bash
+source "C:/Users/apeng/anaconda3/etc/profile.d/conda.sh" && conda activate travel-agent
+```
+
 ## 运行应用
 
 ```bash
@@ -13,7 +27,7 @@ TravelAgent 是一个基于 Python 的 AI 旅行规划智能体，使用 LangGra
 python graph/run.py
 
 # MCP 示例（MCP + LangGraph 集成）
-cd learn/mcp
+cd learn/mcps
 python mcp_agent_demo.py
 
 # ReAct 模式示例
