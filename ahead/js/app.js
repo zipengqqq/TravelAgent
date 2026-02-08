@@ -86,21 +86,47 @@ class ChatApp {
         this.showTypingIndicator();
 
         try {
-            // 调用 API
-            const response = await api.chat(message);
+            // 使用流式 API
+            await api.chatStream(
+                message,
+                (chunk) => {
+                    // 隐藏打字指示器
+                    this.hideTypingIndicator();
 
-            // 隐藏打字指示器
-            this.hideTypingIndicator();
-
-            // 显示 AI 回复
-            this.addMessage(response.response, 'assistant');
+                    // 处理不同类型的 chunk
+                    if (chunk.type === 'node') {
+                        // 节点状态，可以在这里添加提示
+                        console.log('Node:', chunk.node, chunk.data);
+                    } else if (chunk.type === 'chunk') {
+                        // 响应内容块（节点级流式，每次返回完整响应）
+                        if (chunk.data.response) {
+                            this.addMessage(chunk.data.response, 'assistant');
+                        }
+                    } else if (chunk.type === 'end') {
+                        // 流结束
+                        console.log('Stream end:', chunk.data);
+                    } else if (chunk.type === 'error') {
+                        console.error('Stream error:', chunk.data);
+                    }
+                },
+                () => {
+                    // 完成回调
+                    this.isTyping = false;
+                    this.handleInput();
+                },
+                (error) => {
+                    // 错误回调
+                    this.addErrorMessage(error.message || '发送消息时出错');
+                    this.isTyping = false;
+                    this.handleInput();
+                }
+            );
         } catch (error) {
             // 隐藏打字指示器
             this.hideTypingIndicator();
 
             // 显示错误消息
             this.addErrorMessage(error.message || '发送消息时出错');
-        } finally {
             this.isTyping = false;
             this.handleInput();
         }
@@ -133,6 +159,8 @@ class ChatApp {
             messageDiv.offsetHeight; // 触发重排
             messageDiv.style.animation = 'slideIn 0.3s ease-out';
         }, 10);
+
+        return messageDiv;
     }
 
     /**

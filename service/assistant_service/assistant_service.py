@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import json
 import os
 
 from graph.async_workflow import async_workflow, compiled_async_workflow
@@ -60,7 +61,7 @@ class AssistantService:
             logger.info("AssistantService 连接池已关闭")
 
     async def chat(self, request: ChatRequest):
-        """chatbox实现"""
+        """流式chatbox实现"""
         await self._ensure_initialized()
 
         question = request.question
@@ -80,12 +81,51 @@ class AssistantService:
 
         config = {"configurable": {"thread_id": thread_id}}
 
-        result = await self._app.ainvoke(state, config=config)
-
-        return {
-            "thread_id": thread_id,
-            "response": result.get("response", ""),
-            "route": result.get("route", ""),
-            "memories": result.get("memories", []),
-        }
+        # 使用 astream 进行流式输出
+        async for event in self._app.astream(state, config=config):
+            # 提取每个节点的输出
+            for node_name, node_output in event.items():
+                if node_name == "__end__":
+                    # 流结束
+                    yield {
+                        "type": "end",
+                        "data": {
+                            "thread_id": thread_id,
+                            "response": node_output.get("response", ""),
+                            "route": node_output.get("route", ""),
+                            "memories": node_output.get("memories", []),
+                        }
+                    }
+                elif node_name == "router":
+                    yield {
+                        "type": "node",
+                        "node": "router",
+                        "data": {"route": node_output.get("route", "")}
+                    }
+                elif node_name == "planner":
+                    yield {
+                        "type": "node",
+                        "node": "planner",
+                        "data": {"plan": node_output.get("plan", [])}
+                    }
+                elif node_name == "executor":
+                    yield {
+                        "type": "node",
+                        "node": "executor",
+                        "data": {"past_step": node_output.get("past_step", None)}
+                    }
+                elif node_name == "reflect":
+                    response = node_output.get("response", "")
+                    if response:
+                        yield {
+                            "type": "chunk",
+                            "data": {"response": response}
+                        }
+                elif node_name == "direct_answer":
+                    response = node_output.get("response", "")
+                    if response:
+                        yield {
+                            "type": "chunk",
+                            "data": {"response": response}
+                        }
 

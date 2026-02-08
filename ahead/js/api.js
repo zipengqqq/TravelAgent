@@ -48,9 +48,9 @@ class TravelAgentAPI {
     }
 
     /**
-     * 流式聊天（可选实现）
+     * 流式聊天
      * @param {string} message - 用户消息
-     * @param {Function} onChunk - 接收数据块的回调函数
+     * @param {Function} onChunk - 接收数据块的回调函数 (chunk: {type: string, data: object})
      * @param {Function} onComplete - 完成回调函数
      * @param {Function} onError - 错误回调函数
      */
@@ -69,13 +69,50 @@ class TravelAgentAPI {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || errorData.error || '请求失败');
+                const errorText = await response.text();
+                try {
+                    const errorData = JSON.parse(errorText);
+                    throw new Error(errorData.detail || errorData.error || '请求失败');
+                } catch {
+                    throw new Error('请求失败: ' + errorText);
+                }
             }
 
-            const data = await response.json();
-            onChunk(data.response || '');
-            onComplete();
+            // 使用 ReadableStream 读取 SSE 数据
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                // 解码并添加到缓冲区
+                buffer += decoder.decode(value, { stream: true });
+
+                // 处理缓冲区中的每一行
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // 保留最后一个不完整的行
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        if (data) {
+                            try {
+                                const chunk = JSON.parse(data);
+                                onChunk(chunk);
+
+                                if (chunk.type === 'end') {
+                                    onComplete();
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('解析 SSE 数据失败:', e, data);
+                            }
+                        }
+                    }
+                }
+            }
         } catch (error) {
             console.error('API 错误:', error);
             onError(error);
