@@ -1,12 +1,11 @@
 from typing import List
-import os
 
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from utils.db_util import create_session
 from utils.id_util import id_worker
 from utils.logger_util import logger
-from entity.memory_entity import Memory
+from pojo.entity.memory_entity import Memory
 
 
 class MemoryRAG:

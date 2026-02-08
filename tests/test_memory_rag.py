@@ -3,12 +3,11 @@ MemoryRAG 单元测试
 测试记忆添加和检索功能
 """
 
-import os
 import unittest
 from dotenv import load_dotenv
 
 from graph.memory_rag import memory_rag
-from entity.memory_entity import Memory
+from pojo.entity.memory_entity import Memory
 from utils.db_util import create_session
 from utils.logger_util import logger
 

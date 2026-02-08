@@ -28,3 +28,11 @@ xiaohongshu-automation>=2.0.0
 pandas>=2.0.0
 playwright>=1.47.0
 fastmcp>=2.14.0
+
+# Async dependencies for TravelAgent async refactoring
+asyncpg>=0.29.0
+aiosqlite>=0.19.0
+httpx>=0.25.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic-settings>=2.0.0

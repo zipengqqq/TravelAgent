@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(set:*)",
+      "Bash(python:*)",
+      "mcp__postgres__search_objects",
+      "Bash(powershell -Command \"& {cd ''C:\\\\Users\\\\apeng\\\\PycharmProjects\\\\TravelAgent''; python tests\\\\test_xhs.py}\")",
+      "Bash(source:*)",
+      "Bash(conda activate:*)",
+      "Bash(PYTHONPATH=. python:*)",
+      "Bash(pip install:*)",
+      "Bash(playwright install:*)",
+      "Bash(nvidia-smi:*)"
+    ]
+  }
+}

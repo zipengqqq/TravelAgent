@@ -24,7 +24,7 @@ source "C:/Users/apeng/anaconda3/etc/profile.d/conda.sh" && conda activate trave
 
 ```bash
 # 主旅行规划智能体
-python graph/run.py
+python graph/sync_run.py
 
 # MCP 示例（MCP + LangGraph 集成）
 cd learn/mcps
@@ -121,15 +121,15 @@ python 05_long_memory.py  # 长期记忆
 
 ```
 graph/          # 主智能体工作流（workflow.py, nodes.py, config.py, prompts.py, memory_rag.py, run.py, function.py）
-entity/         # 数据库模型（SQLAlchemy）
 utils/          # 数据库会话、日志、ID 生成器、JSON 解析器
 learn/          # 学习示例（MCP、持久化、ReAct）
-tests/          # 测试文件（test_memory_rag.py）
+tests/          # 测试文件（test_memory_rag.py），都使用unittest进行测试
 assets/         # 静态资源（流程图）
 logs/           # 应用日志（由 loguru 生成）
 api/            # 路由层
 service/        # 业务层
 ahead/          # 前端页面，包括html、css、javascript等
+pojo/           # 实体类层，entity存放数据库实体类，request存放前端传入的请求参数对象，供路由（Controller）层使用。
 ```
 
 ## 关键技术
