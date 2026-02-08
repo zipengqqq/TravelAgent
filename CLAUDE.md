@@ -127,6 +127,9 @@ learn/          # 学习示例（MCP、持久化、ReAct）
 tests/          # 测试文件（test_memory_rag.py）
 assets/         # 静态资源（流程图）
 logs/           # 应用日志（由 loguru 生成）
+api/            # 路由层
+service/        # 业务层
+ahead/          # 前端页面，包括html、css、javascript等
 ```
 
 ## 关键技术
