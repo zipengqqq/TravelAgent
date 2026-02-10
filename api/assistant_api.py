@@ -2,7 +2,9 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
+from pojo.request.conversation_add_request import ConversationAddRequest
 from service.assistant_service import AssistantService
 
 router = APIRouter()
@@ -32,5 +34,11 @@ async def chat(request: ChatRequest):
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.post("/conversation/add", summary="新增对话")
+def add_conversation(request: ConversationAddRequest):
+    """新增对话，返回创建的记录"""
+    return assistant_service.add_conversation(request)
 
 

@@ -2,9 +2,14 @@ import asyncio
 import inspect
 import json
 import os
+from datetime import date, datetime
 
 from graph.async_workflow import async_workflow, compiled_async_workflow
+from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
+from pojo.request.conversation_add_request import ConversationAddRequest
+from utils.db_util import create_session
+from utils.id_util import id_worker
 from utils.logger_util import logger
 
 
@@ -128,4 +133,20 @@ class AssistantService:
                             "type": "chunk",
                             "data": {"response": response}
                         }
+
+    def add_conversation(self, request: ConversationAddRequest):
+        """新增对话"""
+        thread_id = id_worker.get_id()
+        id = id_worker.get_id()
+        with create_session() as session:
+            record = Conversation(
+                id=id,
+                user_id=request.user_id,
+                thread_id=thread_id,
+                create_time=datetime.datetime.now(),
+                name=str(thread_id)
+            )
+            session.add(record)
+            logger.info(f"新增对话成功: id={record.id}, user_id={request.user_id}, thread_id={thread_id}")
+            return record
 
