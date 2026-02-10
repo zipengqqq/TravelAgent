@@ -143,19 +143,10 @@ class AssistantService:
                 id=id,
                 user_id=request.user_id,
                 thread_id=thread_id,
-                create_time=datetime.now(),
+                create_time=datetime.datetime.now(),
                 name=str(thread_id)
             )
             session.add(record)
             logger.info(f"新增对话成功: id={record.id}, user_id={request.user_id}, thread_id={thread_id}")
-            return record.to_dict()
-
-    def list_conversations(self, user_id: int):
-        """查询用户的所有对话"""
-        with create_session() as session:
-            conversations = session.query(Conversation).filter(
-                Conversation.user_id == user_id
-            ).all()
-            logger.info(f"查询对话列表成功: user_id={user_id}, count={len(conversations)}")
-            return [conversation.to_dict() for conversation in conversations]
+            return record
 
