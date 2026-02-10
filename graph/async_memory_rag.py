@@ -7,6 +7,7 @@
 
 import asyncio
 import datetime
+import platform
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
@@ -24,10 +25,27 @@ class AsyncMemoryRAG:
     def __init__(self):
         # 使用本地免费模型 BAAI/bge-m3（中文效果好）
         # 首次运行会自动下载模型（约 2.2GB），之后就在本地运行
-        logger.info("初始化 AsyncMemoryRAG，使用 BAAI/bge-m3 嵌入模型 (GPU)")
+
+        # 自动检测系统并选择合适的设备
+        system = platform.system()
+        if system == "Darwin":
+            # macOS (Apple Silicon) 使用 MPS (Metal Performance Shaders)
+            device = "mps"
+            logger.info("检测到 macOS，使用 MPS 加速")
+        else:
+            # Windows/Linux 使用 CUDA (如果有 NVIDIA GPU)，否则使用 CPU
+            try:
+                import torch
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                logger.info(f"检测到 {system}，使用 {'CUDA' if device == 'cuda' else 'CPU'}")
+            except ImportError:
+                device = "cpu"
+                logger.info(f"检测到 {system}，使用 CPU")
+
+        logger.info(f"初始化 AsyncMemoryRAG，使用 BAAI/bge-m3 嵌入模型 (设备: {device})")
         self.embeddings = HuggingFaceEmbeddings(
             model_name="models/BAAI/bge-m3",  # 使用本地模型路径
-            model_kwargs={'device': 'cuda'},  # 使用 GPU
+            model_kwargs={'device': device},
             encode_kwargs={'normalize_embeddings': True}  # 归一化有助于向量相似度计算
         )
         # 线程池用于执行同步的嵌入操作

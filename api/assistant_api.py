@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from pojo.request.chat_request import ChatRequest
-from service.assistant_service.assistant_service import AssistantService
+from service.assistant_service import AssistantService
 
 router = APIRouter()
 assistant_service = AssistantService()
