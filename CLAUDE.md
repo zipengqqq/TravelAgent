@@ -163,6 +163,54 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 TAVILY_API_KEY=tvly-xxx
 ```
 
+## API 设计规范
+
+### HTTP 方法选择
+
+**优先使用 POST 方法进行所有 API 调用**，包括：
+- 查询操作（如获取对话列表）
+- 新增操作
+- 更新操作
+- 删除操作
+
+POST 方法的优势：
+- 参数通过请求体传递，便于复杂参数和扩展
+- 避免浏览器缓存和预检请求问题
+- 更安全（参数不在 URL 中）
+- 统一风格，降低复杂度
+
+**例外情况**：仅对真正的资源获取且参数极简单的场景考虑使用 GET，如静态文件下载。
+
+### 请求参数定义
+
+所有 POST 请求必须使用 Pydantic BaseModel 定义请求参数类，存放于 `pojo/request/` 目录：
+
+```python
+# pojo/request/example_request.py
+from pydantic import BaseModel, Field
+
+class ExampleRequest(BaseModel):
+    """操作说明"""
+    user_id: int = Field(..., description="用户id")
+    # 其他参数...
+```
+
+### 路由层示例
+
+```python
+from pojo.request.example_request import ExampleRequest
+
+@router.post("/api/path", summary="接口说明")
+def endpoint(request: ExampleRequest):
+    """接口描述"""
+    result = service.method(request.user_id)
+    return build_response(result)
+```
+
+### 响应格式
+
+使用 `utils/api_response_util.py` 中的 `build_response()` 函数统一封装响应。
+
 ## 重要模式
 
 ### LLM 响应的 JSON 解析

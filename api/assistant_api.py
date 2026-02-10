@@ -5,6 +5,8 @@ from fastapi.responses import StreamingResponse
 
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
+from pojo.request.conversation_list_request import ConversationListRequest
+
 from service.assistant_service import AssistantService
 from utils.api_response_uti import build_response
 
@@ -44,9 +46,9 @@ def add_conversation(request: ConversationAddRequest):
     return build_response(conversation)
 
 
-@router.get("/conversation/list/{user_id}", summary="查询对话列表")
-def list_conversations(user_id: int):
+@router.post("/conversation/list", summary="查询对话列表")
+def list_conversations(request: ConversationListRequest):
     """查询用户的所有对话"""
-    return build_response(assistant_service.list_conversations(user_id))
+    return build_response(assistant_service.list_conversations(request.user_id))
 
 
