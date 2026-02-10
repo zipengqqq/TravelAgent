@@ -159,3 +159,21 @@ class AssistantService:
             logger.info(f"查询对话列表成功: user_id={user_id}, count={len(conversations)}")
             return [conversation.to_dict() for conversation in conversations]
 
+    async def select_conversation(self, thread_id: str):
+        """查看对话内容，返回用户问题和AI回复"""
+        await self._ensure_initialized()
+        config = {"configurable": {"thread_id": thread_id}}
+        state = await self._app.aget_state(config)
+        messages = state.values.get("messages", [])
+        logger.info(f"查询对话内容成功: thread_id={thread_id}, messages_count={len(messages)}")
+
+        # 提取用户问题和AI回复
+        result = []
+        for msg in messages:
+            role, content = msg
+            result.append({
+                "role": role,
+                "content": content
+            })
+        return result
+
