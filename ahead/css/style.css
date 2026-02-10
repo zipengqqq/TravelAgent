@@ -263,7 +263,7 @@ body {
 /* 头部 */
 .header {
     flex-shrink: 0;
-    padding: 20px 24px;
+    padding: 25px 24px;
     background-color: var(--bg-primary);
     border-bottom: 1px solid var(--border-color);
     backdrop-filter: blur(20px);
@@ -271,37 +271,12 @@ body {
     background-color: rgba(245, 245, 247, 0.8);
 }
 
-.header-row {
-    max-width: 980px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.sidebar-toggle {
+.floating-sidebar-toggle {
     display: none;
 }
 
 .sidebar-close {
     display: none;
-}
-
-.header-content {
-    max-width: 100%;
-}
-
-.app-title {
-    font-size: 24px;
-    font-weight: 600;
-    letter-spacing: -0.5px;
-    color: var(--text-primary);
-}
-
-.app-subtitle {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin-top: 4px;
 }
 
 /* 消息容器 */
@@ -686,8 +661,15 @@ body {
         transform: translateX(0);
     }
 
-    .sidebar-toggle {
+    .floating-sidebar-toggle {
         display: inline-flex;
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        z-index: 20;
+        background-color: var(--bg-elevated);
+        border-color: rgba(29, 29, 31, 0.10);
+        box-shadow: var(--shadow-sm);
     }
 
     .sidebar-close {
@@ -695,7 +677,7 @@ body {
     }
 
     .header {
-        padding: 16px 20px;
+        padding: 10px 20px;
     }
 
     .app-title {
