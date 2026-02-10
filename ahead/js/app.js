@@ -9,21 +9,46 @@ class ChatApp {
         this.messageInput = document.getElementById('messageInput');
         this.sendButton = document.getElementById('sendButton');
         this.typingIndicator = document.getElementById('typingIndicator');
+        this.chatList = document.getElementById('chatList');
+        this.newChatButton = document.getElementById('newChatButton');
+        this.sidebar = document.getElementById('sidebar');
+        this.sidebarToggle = document.getElementById('sidebarToggle');
+        this.sidebarClose = document.getElementById('sidebarClose');
+        this.sidebarBackdrop = document.getElementById('sidebarBackdrop');
 
         this.isTyping = false;
         this.welcomeShown = true;
+        this.storageKey = 'travelassistant_conversations_v1';
+        this.conversations = [];
+        this.activeConversationId = null;
+        this.welcomeTemplate = '';
 
         this.init();
     }
 
     init() {
-        // 绑定事件
         this.messageInput.addEventListener('input', () => this.handleInput());
         this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.sendButton.addEventListener('click', () => this.sendMessage());
-
-        // 自动调整输入框高度
         this.messageInput.addEventListener('input', () => this.autoResizeInput());
+
+        this.newChatButton.addEventListener('click', () => this.createNewConversation(true));
+        this.sidebarToggle.addEventListener('click', () => this.openSidebar());
+        this.sidebarClose.addEventListener('click', () => this.closeSidebar());
+        this.sidebarBackdrop.addEventListener('click', () => this.closeSidebar());
+
+        this.welcomeTemplate = this.messagesContainer.querySelector('.welcome-message')?.outerHTML || '';
+
+        this.loadConversations();
+        if (this.conversations.length === 0) {
+            const conversation = this.createNewConversation(false);
+            this.activeConversationId = conversation.id;
+        } else {
+            this.activeConversationId = this.conversations[0].id;
+        }
+
+        this.renderChatList();
+        this.renderActiveConversation();
     }
 
     /**
@@ -64,68 +89,88 @@ class ChatApp {
             return;
         }
 
-        // 隐藏欢迎消息
+        const conversation = this.getActiveConversation() || this.createNewConversation(false);
+        this.activeConversationId = conversation.id;
+        this.renderChatList();
+
         if (this.welcomeShown) {
             const welcomeMessage = this.messagesContainer.querySelector('.welcome-message');
-            if (welcomeMessage) {
-                welcomeMessage.remove();
-            }
+            if (welcomeMessage) welcomeMessage.remove();
             this.welcomeShown = false;
         }
 
-        // 清空输入框
         this.messageInput.value = '';
         this.messageInput.style.height = 'auto';
         this.sendButton.disabled = true;
 
-        // 显示用户消息
+        const now = Date.now();
+        conversation.updatedAt = now;
+        if (!conversation.title || conversation.title === '新对话') {
+            conversation.title = this.makeTitleFromMessage(message);
+        }
+        conversation.messages.push({ role: 'user', content: message, ts: now });
+        this.saveConversations();
+
         this.addMessage(message, 'user');
         this.isTyping = true;
 
-        // 显示打字指示器
         this.showTypingIndicator();
 
         try {
-            // 使用流式 API
+            const assistantMessageDiv = this.addMessage('', 'assistant');
+            const assistantContentEl = assistantMessageDiv.querySelector('.message-content');
+            let assistantText = '';
+            let receivedFirstChunk = false;
+
             await api.chatStream(
                 message,
                 (chunk) => {
-                    // 隐藏打字指示器
-                    this.hideTypingIndicator();
-
-                    // 处理不同类型的 chunk
                     if (chunk.type === 'node') {
-                        // 节点状态，可以在这里添加提示
                         console.log('Node:', chunk.node, chunk.data);
                     } else if (chunk.type === 'chunk') {
-                        // 响应内容块（节点级流式，每次返回完整响应）
                         if (chunk.data.response) {
-                            this.addMessage(chunk.data.response, 'assistant');
+                            if (!receivedFirstChunk) {
+                                this.hideTypingIndicator();
+                                receivedFirstChunk = true;
+                            }
+
+                            assistantText = chunk.data.response;
+                            if (assistantContentEl) {
+                                assistantContentEl.innerHTML = this.formatMessage(assistantText);
+                            }
+                            this.scrollToBottom();
                         }
                     } else if (chunk.type === 'end') {
-                        // 流结束
                         console.log('Stream end:', chunk.data);
                     } else if (chunk.type === 'error') {
                         console.error('Stream error:', chunk.data);
                     }
                 },
                 () => {
-                    // 完成回调
+                    if (assistantText) {
+                        const doneAt = Date.now();
+                        conversation.updatedAt = doneAt;
+                        conversation.messages.push({ role: 'assistant', content: assistantText, ts: doneAt });
+                        this.saveConversations();
+                        this.renderChatList();
+                    }
                     this.isTyping = false;
                     this.handleInput();
                 },
                 (error) => {
-                    // 错误回调
-                    this.addErrorMessage(error.message || '发送消息时出错');
+                    this.hideTypingIndicator();
+                    if (assistantContentEl) {
+                        assistantContentEl.innerHTML = `<em>${this.escapeHtml(error.message || '发送消息时出错')}</em>`;
+                    } else {
+                        this.addErrorMessage(error.message || '发送消息时出错');
+                    }
                     this.isTyping = false;
                     this.handleInput();
-                }
+                },
+                conversation.threadId
             );
         } catch (error) {
-            // 隐藏打字指示器
             this.hideTypingIndicator();
-
-            // 显示错误消息
             this.addErrorMessage(error.message || '发送消息时出错');
             this.isTyping = false;
             this.handleInput();
@@ -248,6 +293,152 @@ class ChatApp {
      */
     scrollToBottom() {
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    loadConversations() {
+        try {
+            const raw = localStorage.getItem(this.storageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(parsed)) return;
+
+            this.conversations = parsed
+                .filter((c) => c && typeof c === 'object')
+                .map((c) => ({
+                    id: String(c.id || this.createId()),
+                    threadId: String(c.threadId || c.id || this.createId()),
+                    title: typeof c.title === 'string' ? c.title : '新对话',
+                    createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
+                    updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
+                    messages: Array.isArray(c.messages)
+                        ? c.messages
+                              .filter((m) => m && typeof m === 'object')
+                              .map((m) => ({
+                                  role: m.role === 'assistant' ? 'assistant' : 'user',
+                                  content: typeof m.content === 'string' ? m.content : '',
+                                  ts: typeof m.ts === 'number' ? m.ts : Date.now()
+                              }))
+                        : []
+                }))
+                .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        } catch {
+            this.conversations = [];
+        }
+    }
+
+    saveConversations() {
+        const compact = this.conversations
+            .slice()
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+            .slice(0, 60);
+        this.conversations = compact;
+        localStorage.setItem(this.storageKey, JSON.stringify(compact));
+    }
+
+    createNewConversation(select) {
+        const now = Date.now();
+        const id = this.createId();
+        const conversation = {
+            id,
+            threadId: id,
+            title: '新对话',
+            createdAt: now,
+            updatedAt: now,
+            messages: []
+        };
+
+        this.conversations.unshift(conversation);
+        this.saveConversations();
+
+        if (select) {
+            this.activeConversationId = conversation.id;
+            this.renderChatList();
+            this.renderActiveConversation();
+            this.closeSidebar();
+        }
+
+        return conversation;
+    }
+
+    getActiveConversation() {
+        if (!this.activeConversationId) return null;
+        return this.conversations.find((c) => c.id === this.activeConversationId) || null;
+    }
+
+    renderActiveConversation() {
+        const conversation = this.getActiveConversation();
+        if (!conversation) {
+            this.messagesContainer.innerHTML = this.welcomeTemplate || '';
+            this.welcomeShown = true;
+            return;
+        }
+        this.renderConversation(conversation);
+    }
+
+    renderConversation(conversation) {
+        this.messagesContainer.innerHTML = '';
+
+        if (!conversation.messages || conversation.messages.length === 0) {
+            this.messagesContainer.innerHTML = this.welcomeTemplate || '';
+            this.welcomeShown = true;
+            return;
+        }
+
+        this.welcomeShown = false;
+        for (const msg of conversation.messages) {
+            this.addMessage(msg.content, msg.role === 'assistant' ? 'assistant' : 'user');
+        }
+        this.scrollToBottom();
+    }
+
+    renderChatList() {
+        const activeId = this.activeConversationId;
+        this.chatList.innerHTML = '';
+
+        const conversations = this.conversations
+            .slice()
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+        for (const c of conversations) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `chat-item${c.id === activeId ? ' active' : ''}`;
+            btn.dataset.conversationId = c.id;
+
+            const title = document.createElement('div');
+            title.className = 'chat-item-title';
+            title.textContent = c.title || '新对话';
+            btn.appendChild(title);
+
+            btn.addEventListener('click', () => {
+                this.activeConversationId = c.id;
+                this.renderChatList();
+                this.renderConversation(c);
+                this.closeSidebar();
+            });
+
+            this.chatList.appendChild(btn);
+        }
+    }
+
+    makeTitleFromMessage(message) {
+        const cleaned = String(message).trim().replace(/\s+/g, ' ');
+        if (!cleaned) return '新对话';
+        return cleaned.length > 22 ? cleaned.slice(0, 22) + '…' : cleaned;
+    }
+
+    createId() {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+        return `c_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
+    }
+
+    openSidebar() {
+        document.body.classList.add('sidebar-open');
+    }
+
+    closeSidebar() {
+        document.body.classList.remove('sidebar-open');
     }
 }
 

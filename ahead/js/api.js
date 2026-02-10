@@ -20,7 +20,7 @@ class TravelAgentAPI {
      * @param {string} message - 用户消息
      * @returns {Promise<Object>} 响应数据
      */
-    async chat(message) {
+    async chat(message, threadId) {
         try {
             const response = await fetch(`${this.baseURL}/api/v1/chat`, {
                 method: 'POST',
@@ -30,7 +30,7 @@ class TravelAgentAPI {
                 body: JSON.stringify({
                     user_id: this.user_id,
                     question: message,
-                    thread_id: this.thread_id
+                    thread_id: threadId ?? this.thread_id
                 })
             });
 
@@ -53,8 +53,9 @@ class TravelAgentAPI {
      * @param {Function} onChunk - 接收数据块的回调函数 (chunk: {type: string, data: object})
      * @param {Function} onComplete - 完成回调函数
      * @param {Function} onError - 错误回调函数
+     * @param {string} threadId - 可选的会话 thread_id
      */
-    async chatStream(message, onChunk, onComplete, onError) {
+    async chatStream(message, onChunk, onComplete, onError, threadId) {
         try {
             const response = await fetch(`${this.baseURL}/api/v1/chat`, {
                 method: 'POST',
@@ -64,7 +65,7 @@ class TravelAgentAPI {
                 body: JSON.stringify({
                     user_id: this.user_id,
                     question: message,
-                    thread_id: this.thread_id
+                    thread_id: threadId ?? this.thread_id
                 })
             });
 

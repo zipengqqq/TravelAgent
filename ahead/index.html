@@ -10,60 +10,117 @@
     <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=SF+Pro+Text:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <!-- 头部 -->
-        <header class="header">
-            <div class="header-content">
-                <h1 class="app-title">TravelAssistant</h1>
-                <p class="app-subtitle">智能旅行规划助手</p>
-            </div>
-        </header>
-
-        <!-- 消息容器 -->
-        <div class="messages-container" id="messagesContainer">
-            <div class="welcome-message">
-                <div class="welcome-icon">✈️</div>
-                <h2>欢迎使用 TravelAssistant</h2>
-                <p>我是您的智能旅行助手，可以帮您：</p>
-                <ul class="feature-list">
-                    <li>规划旅行行程</li>
-                    <li>查询景点信息</li>
-                    <li>推荐美食餐厅</li>
-                    <li>提供旅行建议</li>
-                </ul>
-                <p class="hint">试着说："帮我规划一个3天的北京行程"</p>
-            </div>
-        </div>
-
-        <!-- 输入区域 -->
-        <div class="input-container">
-            <div class="input-wrapper">
-                <textarea
-                    id="messageInput"
-                    class="message-input"
-                    placeholder="输入您的问题..."
-                    rows="1"
-                    maxlength="2000"
-                ></textarea>
-                <button id="sendButton" class="send-button" disabled>
-                    <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 2L11 13"/>
-                        <path d="M22 2L15 22L11 13L2 9L22 2Z"/>
+    <div class="layout">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 16l20-6-20-6 7 6-7 6z"/>
+                            <path d="M9 10l4 2 9-3"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <div class="brand-name">TravelAssistant</div>
+                        <div class="brand-subtitle">智能旅行规划助手</div>
+                    </div>
+                </div>
+                <button class="icon-button sidebar-close" id="sidebarClose" type="button" aria-label="关闭侧边栏">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18"/>
+                        <path d="M6 6L18 18"/>
                     </svg>
                 </button>
             </div>
-            <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
-        </div>
 
-        <!-- 加载指示器 -->
-        <div class="typing-indicator" id="typingIndicator" style="display: none;">
-            <div class="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
+            <button class="new-chat-button" id="newChatButton" type="button">
+                <svg class="new-chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14"/>
+                    <path d="M5 12h14"/>
+                </svg>
+                新对话
+            </button>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">历史对话</div>
+                <div class="chat-list" id="chatList"></div>
             </div>
-        </div>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-footer-hint">对话记录保存在本地浏览器</div>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main">
+            <div class="app-container">
+                <!-- 头部 -->
+                <header class="header">
+                    <div class="header-row">
+                        <button class="icon-button sidebar-toggle" id="sidebarToggle" type="button" aria-label="打开侧边栏">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 6h16"/>
+                                <path d="M4 12h16"/>
+                                <path d="M4 18h16"/>
+                            </svg>
+                        </button>
+                        <div class="header-content">
+                            <h1 class="app-title">TravelAssistant</h1>
+                            <p class="app-subtitle">智能旅行规划助手</p>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- 消息容器 -->
+                <div class="messages-container" id="messagesContainer">
+                    <div class="welcome-message">
+                        <div class="welcome-icon">✈️</div>
+                        <h2>欢迎使用 TravelAssistant</h2>
+                        <p>我是您的智能旅行助手，可以帮您：</p>
+                        <ul class="feature-list">
+                            <li>规划旅行行程</li>
+                            <li>查询景点信息</li>
+                            <li>推荐美食餐厅</li>
+                            <li>提供旅行建议</li>
+                        </ul>
+                        <p class="hint">试着说："帮我规划一个3天的北京行程"</p>
+                    </div>
+                </div>
+
+                <!-- 输入区域 -->
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea
+                            id="messageInput"
+                            class="message-input"
+                            placeholder="输入您的问题..."
+                            rows="1"
+                            maxlength="2000"
+                        ></textarea>
+                        <button id="sendButton" class="send-button" disabled type="button">
+                            <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13"/>
+                                <path d="M22 2L15 22L11 13L2 9L22 2Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
+                </div>
+
+                <!-- 加载指示器 -->
+                <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
+
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
     <script src="js/api.js"></script>
     <script src="js/app.js"></script>
