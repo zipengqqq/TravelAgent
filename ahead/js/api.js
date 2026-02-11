@@ -90,6 +90,10 @@ class TravelAgentAPI {
         return await this.post('/conversation/select', { thread_id: threadId });
     }
 
+    async conversationDelete(threadId) {
+        return await this.post('/conversation/delete', { thread_id: threadId });
+    }
+
     /**
      * 流式聊天
      * @param {string} message - 用户消息

@@ -373,6 +373,30 @@ class ChatApp {
         }
     }
 
+    async deleteConversation(conversation) {
+        if (!conversation || !conversation.threadId) return;
+        const title = conversation.title || conversation.threadId;
+        const shouldDelete = typeof window !== 'undefined' && typeof window.confirm === 'function'
+            ? window.confirm(`确定删除对话「${title}」吗？`)
+            : true;
+        if (!shouldDelete) return;
+
+        if (this.isTyping && this.activeConversationId === conversation.id) {
+            throw new Error('正在生成回复，无法删除当前对话');
+        }
+
+        await api.conversationDelete(conversation.threadId);
+
+        this.conversations = this.conversations.filter((c) => c.id !== conversation.id);
+        if (this.activeConversationId === conversation.id) {
+            this.activeConversationId = null;
+            this.renderMessages([]);
+        }
+        this.renderChatList();
+        await this.refreshConversationList();
+        this.renderChatList();
+    }
+
     renderMessages(messages) {
         this.messagesContainer.innerHTML = '';
 
@@ -409,6 +433,33 @@ class ChatApp {
             title.className = 'chat-item-title';
             title.textContent = c.title || '新对话';
             btn.appendChild(title);
+
+            const del = document.createElement('span');
+            del.className = 'chat-item-delete';
+            del.setAttribute('role', 'button');
+            del.setAttribute('tabindex', '0');
+            del.setAttribute('aria-label', '删除对话');
+            del.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M3 6h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="M8 6V4h8v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="M10 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <path d="M14 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+            `.trim();
+            del.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.deleteConversation(c).catch((err) => this.addErrorMessage(err?.message || '删除对话失败'));
+            });
+            del.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.deleteConversation(c).catch((err) => this.addErrorMessage(err?.message || '删除对话失败'));
+            });
+            btn.appendChild(del);
 
             btn.addEventListener('click', () => {
                 this.activeConversationId = c.id;

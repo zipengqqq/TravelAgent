@@ -19,5 +19,7 @@ class Conversation(Base):
             # 将 datetime 对象转换为字符串
             if c.key == 'create_time' and value is not None:
                 value = str(value)
+            if (c.key == 'id' or c.key.endswith('id')) and value is not None:
+                value = str(value)
             result[c.key] = value
         return result

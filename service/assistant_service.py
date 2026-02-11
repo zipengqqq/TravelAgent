@@ -197,7 +197,7 @@ class AssistantService:
         """删除对话"""
         with create_session() as session:
             deleted_count = session.query(Conversation).filter(
-                Conversation.thread_id == request.thread_id
+                Conversation.thread_id == int(request.thread_id)
             ).delete()
             logger.info(f"删除对话: thread_id={request.thread_id}, deleted_count={deleted_count}")
             return {"deleted_count": deleted_count}

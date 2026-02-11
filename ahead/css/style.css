@@ -234,6 +234,36 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-item-delete {
+    margin-left: auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.chat-item-delete svg {
+    width: 16px;
+    height: 16px;
+}
+
+.chat-item-delete:hover {
+    background-color: rgba(29, 29, 31, 0.06);
+    color: var(--text-primary);
+}
+
+.chat-item-delete:focus {
+    outline: 2px solid rgba(0, 122, 255, 0.35);
+    outline-offset: 2px;
 }
 
 .sidebar-footer {
