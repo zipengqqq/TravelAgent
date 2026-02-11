@@ -32,7 +32,10 @@ class ChatApp {
         this.messageInput.addEventListener('input', () => this.autoResizeInput());
 
         this.newChatButton.addEventListener('click', () => {
-            this.createNewConversation(true).catch((e) => this.addErrorMessage(e.message || '创建对话失败'));
+            this.activeConversationId = null;
+            this.renderChatList();
+            this.renderMessages([]);
+            this.closeSidebar();
         });
         this.sidebarToggle.addEventListener('click', () => this.openSidebar());
         this.sidebarClose.addEventListener('click', () => this.closeSidebar());
@@ -44,17 +47,8 @@ class ChatApp {
 
     async bootstrap() {
         await this.refreshConversationList();
-        if (this.conversations.length === 0) {
-            const conversation = await this.createNewConversation(false);
-            this.activeConversationId = conversation.id;
-            this.renderChatList();
-            this.renderMessages([]);
-            return;
-        }
-
-        this.activeConversationId = this.conversations[0].id;
         this.renderChatList();
-        await this.loadAndRenderActiveConversation();
+        this.renderMessages([]);
     }
 
     /**
@@ -97,7 +91,7 @@ class ChatApp {
 
         let conversation = this.getActiveConversation();
         if (!conversation) {
-            conversation = await this.createNewConversation(false);
+            conversation = await this.createNewConversation(false, message);
             this.activeConversationId = conversation.id;
             this.renderChatList();
         }
@@ -336,8 +330,8 @@ class ChatApp {
         return Number.isFinite(ts) ? ts : 0;
     }
 
-    async createNewConversation(select) {
-        const response = await api.conversationAdd();
+    async createNewConversation(select, question) {
+        const response = await api.conversationAdd(question);
         const record = response?.data;
         const conversation = this.mapConversationRecord(record);
         if (!conversation.threadId) {

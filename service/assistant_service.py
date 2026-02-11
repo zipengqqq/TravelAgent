@@ -1,17 +1,28 @@
 import asyncio
 import inspect
-import json
 import os
-from datetime import date, datetime
+from datetime import datetime
+
+from langchain_openai import ChatOpenAI
 
 from graph.async_workflow import async_workflow, compiled_async_workflow
 from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
+from service.prompts import name_conversation_prompt
 from utils.db_util import create_session
 from utils.id_util import id_worker
 from utils.logger_util import logger
+from utils.parse_llm_json_util import parse_llm_json
 
+llm = ChatOpenAI(
+    model="deepseek-chat",
+    api_key=os.getenv('DEEPSEEK_API_KEY'),
+    base_url=os.getenv('DEEPSEEK_BASE_URL'),
+    temperature=0.7,
+    streaming=True,  # 开启流式
+    max_retries=2  # 添加重试
+)
 
 class AssistantService:
     def __init__(self):
@@ -134,17 +145,21 @@ class AssistantService:
                             "data": {"response": response}
                         }
 
-    def add_conversation(self, request: ConversationAddRequest):
+    async def add_conversation(self, request: ConversationAddRequest):
         """新增对话"""
         thread_id = id_worker.get_id()
         id = id_worker.get_id()
+
+        # 给对话起名字
+        name = await self._generate_conversation_name(request.question)
+        name = name if name else f"对话_{thread_id}"
         with create_session() as session:
             record = Conversation(
                 id=id,
                 user_id=request.user_id,
                 thread_id=thread_id,
                 create_time=datetime.now(),
-                name=str(thread_id)
+                name=name
             )
             session.add(record)
             logger.info(f"新增对话成功: id={record.id}, user_id={request.user_id}, thread_id={thread_id}")
@@ -176,4 +191,12 @@ class AssistantService:
                 "content": content
             })
         return result
+
+    async def _generate_conversation_name(self, question):
+        """给对话起名字"""
+        prompt = name_conversation_prompt.format(question=question)
+        raw = await llm.ainvoke(prompt)
+        response = parse_llm_json(raw.content)
+        logger.info(f"LLM响应: {response}")
+        return response.get('res', '')
 

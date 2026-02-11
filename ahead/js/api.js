@@ -82,8 +82,8 @@ class TravelAgentAPI {
         return await this.post('/conversation/list', { user_id: this.user_id });
     }
 
-    async conversationAdd() {
-        return await this.post('/conversation/add', { user_id: this.user_id });
+    async conversationAdd(question) {
+        return await this.post('/conversation/add', { user_id: this.user_id, question: question ?? '' });
     }
 
     async conversationSelect(threadId) {

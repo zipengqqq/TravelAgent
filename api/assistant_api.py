@@ -43,7 +43,7 @@ async def chat(request: ChatRequest):
 @router.post("/conversation/add", summary="新增对话")
 async def add_conversation(request: ConversationAddRequest):
     """新增对话，返回创建的记录"""
-    conversation = assistant_service.add_conversation(request)
+    conversation = await assistant_service.add_conversation(request)
     return build_response(conversation)
 
 
