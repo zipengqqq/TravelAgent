@@ -18,7 +18,6 @@ class ChatApp {
 
         this.isTyping = false;
         this.welcomeShown = true;
-        this.storageKey = 'travelassistant_conversations_v1';
         this.conversations = [];
         this.activeConversationId = null;
         this.welcomeTemplate = '';
@@ -32,23 +31,30 @@ class ChatApp {
         this.sendButton.addEventListener('click', () => this.sendMessage());
         this.messageInput.addEventListener('input', () => this.autoResizeInput());
 
-        this.newChatButton.addEventListener('click', () => this.createNewConversation(true));
+        this.newChatButton.addEventListener('click', () => {
+            this.createNewConversation(true).catch((e) => this.addErrorMessage(e.message || '创建对话失败'));
+        });
         this.sidebarToggle.addEventListener('click', () => this.openSidebar());
         this.sidebarClose.addEventListener('click', () => this.closeSidebar());
         this.sidebarBackdrop.addEventListener('click', () => this.closeSidebar());
 
         this.welcomeTemplate = this.messagesContainer.querySelector('.welcome-message')?.outerHTML || '';
+        this.bootstrap().catch((e) => this.addErrorMessage(e.message || '加载对话失败'));
+    }
 
-        this.loadConversations();
+    async bootstrap() {
+        await this.refreshConversationList();
         if (this.conversations.length === 0) {
-            const conversation = this.createNewConversation(false);
+            const conversation = await this.createNewConversation(false);
             this.activeConversationId = conversation.id;
-        } else {
-            this.activeConversationId = this.conversations[0].id;
+            this.renderChatList();
+            this.renderMessages([]);
+            return;
         }
 
+        this.activeConversationId = this.conversations[0].id;
         this.renderChatList();
-        this.renderActiveConversation();
+        await this.loadAndRenderActiveConversation();
     }
 
     /**
@@ -89,9 +95,12 @@ class ChatApp {
             return;
         }
 
-        const conversation = this.getActiveConversation() || this.createNewConversation(false);
-        this.activeConversationId = conversation.id;
-        this.renderChatList();
+        let conversation = this.getActiveConversation();
+        if (!conversation) {
+            conversation = await this.createNewConversation(false);
+            this.activeConversationId = conversation.id;
+            this.renderChatList();
+        }
 
         if (this.welcomeShown) {
             const welcomeMessage = this.messagesContainer.querySelector('.welcome-message');
@@ -103,13 +112,11 @@ class ChatApp {
         this.messageInput.style.height = 'auto';
         this.sendButton.disabled = true;
 
-        const now = Date.now();
-        conversation.updatedAt = now;
-        if (!conversation.title || conversation.title === '新对话') {
+        if (!conversation.title || conversation.title === conversation.threadId || conversation.title === '新对话') {
             conversation.title = this.makeTitleFromMessage(message);
         }
-        conversation.messages.push({ role: 'user', content: message, ts: now });
-        this.saveConversations();
+        conversation.updatedAt = Date.now();
+        this.renderChatList();
 
         this.addMessage(message, 'user');
         this.isTyping = true;
@@ -147,13 +154,8 @@ class ChatApp {
                     }
                 },
                 () => {
-                    if (assistantText) {
-                        const doneAt = Date.now();
-                        conversation.updatedAt = doneAt;
-                        conversation.messages.push({ role: 'assistant', content: assistantText, ts: doneAt });
-                        this.saveConversations();
-                        this.renderChatList();
-                    }
+                    conversation.updatedAt = Date.now();
+                    this.renderChatList();
                     this.isTyping = false;
                     this.handleInput();
                 },
@@ -295,64 +297,59 @@ class ChatApp {
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
     }
 
-    loadConversations() {
-        try {
-            const raw = localStorage.getItem(this.storageKey);
-            const parsed = raw ? JSON.parse(raw) : [];
-            if (!Array.isArray(parsed)) return;
+    async refreshConversationList() {
+        const response = await api.conversationList();
+        const list = Array.isArray(response?.data) ? response.data : [];
 
-            this.conversations = parsed
-                .filter((c) => c && typeof c === 'object')
-                .map((c) => ({
-                    id: String(c.id || this.createId()),
-                    threadId: String(c.threadId || c.id || this.createId()),
-                    title: typeof c.title === 'string' ? c.title : '新对话',
-                    createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
-                    updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
-                    messages: Array.isArray(c.messages)
-                        ? c.messages
-                              .filter((m) => m && typeof m === 'object')
-                              .map((m) => ({
-                                  role: m.role === 'assistant' ? 'assistant' : 'user',
-                                  content: typeof m.content === 'string' ? m.content : '',
-                                  ts: typeof m.ts === 'number' ? m.ts : Date.now()
-                              }))
-                        : []
-                }))
-                .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-        } catch {
-            this.conversations = [];
-        }
+        const mapped = list
+            .filter((item) => item && typeof item === 'object')
+            .map((item) => this.mapConversationRecord(item))
+            .filter((c) => c.threadId);
+
+        mapped.sort((a, b) => {
+            const at = this.parseTime(a.createdAt);
+            const bt = this.parseTime(b.createdAt);
+            if (bt !== at) return bt - at;
+            return String(b.threadId).localeCompare(String(a.threadId));
+        });
+
+        const existingByThreadId = new Map(this.conversations.map((c) => [String(c.threadId), c]));
+        this.conversations = mapped.map((c) => {
+            const existing = existingByThreadId.get(String(c.threadId));
+            return existing ? { ...c, title: existing.title || c.title, updatedAt: existing.updatedAt } : c;
+        });
     }
 
-    saveConversations() {
-        const compact = this.conversations
-            .slice()
-            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-            .slice(0, 60);
-        this.conversations = compact;
-        localStorage.setItem(this.storageKey, JSON.stringify(compact));
-    }
-
-    createNewConversation(select) {
-        const now = Date.now();
-        const id = this.createId();
-        const conversation = {
-            id,
-            threadId: id,
-            title: '新对话',
-            createdAt: now,
-            updatedAt: now,
-            messages: []
+    mapConversationRecord(record) {
+        const threadId = record?.thread_id == null ? '' : String(record.thread_id);
+        return {
+            id: threadId,
+            threadId,
+            title: record?.name ? String(record.name) : threadId,
+            createdAt: record?.create_time ? String(record.create_time) : '',
+            updatedAt: Date.now()
         };
+    }
 
-        this.conversations.unshift(conversation);
-        this.saveConversations();
+    parseTime(value) {
+        const ts = Date.parse(String(value || ''));
+        return Number.isFinite(ts) ? ts : 0;
+    }
+
+    async createNewConversation(select) {
+        const response = await api.conversationAdd();
+        const record = response?.data;
+        const conversation = this.mapConversationRecord(record);
+        if (!conversation.threadId) {
+            throw new Error('创建对话失败：未返回 thread_id');
+        }
+
+        this.conversations = [conversation, ...this.conversations.filter((c) => String(c.threadId) !== String(conversation.threadId))];
 
         if (select) {
             this.activeConversationId = conversation.id;
             this.renderChatList();
-            this.renderActiveConversation();
+            this.renderMessages([]);
             this.closeSidebar();
         }
 
@@ -364,28 +361,38 @@ class ChatApp {
         return this.conversations.find((c) => c.id === this.activeConversationId) || null;
     }
 
-    renderActiveConversation() {
+    async loadAndRenderActiveConversation() {
         const conversation = this.getActiveConversation();
-        if (!conversation) {
-            this.messagesContainer.innerHTML = this.welcomeTemplate || '';
-            this.welcomeShown = true;
-            return;
-        }
-        this.renderConversation(conversation);
+        if (!conversation) return;
+        await this.loadAndRenderConversation(conversation.threadId);
     }
 
-    renderConversation(conversation) {
+    async loadAndRenderConversation(threadId) {
+        this.messagesContainer.innerHTML = '';
+        this.showTypingIndicator();
+        try {
+            const response = await api.conversationSelect(threadId);
+            const messages = Array.isArray(response?.data) ? response.data : [];
+            this.renderMessages(messages);
+        } finally {
+            this.hideTypingIndicator();
+        }
+    }
+
+    renderMessages(messages) {
         this.messagesContainer.innerHTML = '';
 
-        if (!conversation.messages || conversation.messages.length === 0) {
+        if (!Array.isArray(messages) || messages.length === 0) {
             this.messagesContainer.innerHTML = this.welcomeTemplate || '';
             this.welcomeShown = true;
             return;
         }
 
         this.welcomeShown = false;
-        for (const msg of conversation.messages) {
-            this.addMessage(msg.content, msg.role === 'assistant' ? 'assistant' : 'user');
+        for (const msg of messages) {
+            const role = String(msg?.role || '').toLowerCase();
+            const type = role === 'assistant' || role === 'ai' ? 'assistant' : 'user';
+            this.addMessage(String(msg?.content || ''), type);
         }
         this.scrollToBottom();
     }
@@ -412,7 +419,7 @@ class ChatApp {
             btn.addEventListener('click', () => {
                 this.activeConversationId = c.id;
                 this.renderChatList();
-                this.renderConversation(c);
+                this.loadAndRenderConversation(c.threadId).catch((e) => this.addErrorMessage(e.message || '加载对话失败'));
                 this.closeSidebar();
             });
 

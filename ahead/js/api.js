@@ -8,11 +8,52 @@ class TravelAgentAPI {
      * 创建 API 客户端实例
      * @param {string} baseURL - API 基础 URL，默认为当前域名
      */
-    constructor(baseURL = 'http://localhost:8288') {
-        this.baseURL = baseURL;
-        // 固定的 user_id 和 thread_id
+    constructor(baseURL) {
+        const hasWindowOrigin =
+            typeof window !== 'undefined' &&
+            window.location &&
+            typeof window.location.origin === 'string' &&
+            window.location.origin.startsWith('http');
+
+        const windowOrigin = hasWindowOrigin ? window.location.origin : '';
+        const isLocalhost =
+            typeof window !== 'undefined' &&
+            window.location &&
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+        const preferBackendOrigin =
+            isLocalhost && typeof window !== 'undefined' && window.location && window.location.port && window.location.port !== '8288';
+
+        const origin = preferBackendOrigin ? 'http://localhost:8288' : (windowOrigin || 'http://localhost:8288');
+        const resolved = baseURL || `${origin}/api/v1`;
+        this.baseURL = resolved.replace(/\/+$/, '');
+        // 固定的 user_id
         this.user_id = 1;
         this.thread_id = "1";
+    }
+
+    async post(path, body) {
+        const url = `${this.baseURL}${path}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body || {})
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            if (response.status === 404) {
+                throw new Error(`接口不存在(404): ${response.url || url}`);
+            }
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.detail || errorData.error || errorData.message || `请求失败(${response.status}): ${response.url || url}`);
+            } catch {
+                throw new Error(`请求失败(${response.status}): ${response.url || url}\n${errorText}`);
+            }
+        }
+
+        return response.json();
     }
 
     /**
@@ -21,30 +62,32 @@ class TravelAgentAPI {
      * @returns {Promise<Object>} 响应数据
      */
     async chat(message, threadId) {
-        try {
-            const response = await fetch(`${this.baseURL}/api/v1/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+        return await new Promise((resolve, reject) => {
+            let latest = '';
+            this.chatStream(
+                message,
+                (chunk) => {
+                    if (chunk?.type === 'chunk' && chunk?.data?.response != null) {
+                        latest = String(chunk.data.response);
+                    }
                 },
-                body: JSON.stringify({
-                    user_id: this.user_id,
-                    question: message,
-                    thread_id: threadId ?? this.thread_id
-                })
-            });
+                () => resolve({ response: latest }),
+                (error) => reject(error),
+                threadId
+            );
+        });
+    }
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || errorData.error || '请求失败');
-            }
+    async conversationList() {
+        return await this.post('/conversation/list', { user_id: this.user_id });
+    }
 
-            const data = await response.json();
-            return data;
-        } catch (error) {
-            console.error('API 错误:', error);
-            throw error;
-        }
+    async conversationAdd() {
+        return await this.post('/conversation/add', { user_id: this.user_id });
+    }
+
+    async conversationSelect(threadId) {
+        return await this.post('/conversation/select', { thread_id: threadId });
     }
 
     /**
@@ -57,7 +100,8 @@ class TravelAgentAPI {
      */
     async chatStream(message, onChunk, onComplete, onError, threadId) {
         try {
-            const response = await fetch(`${this.baseURL}/api/v1/chat`, {
+            const url = `${this.baseURL}/chat`;
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -71,11 +115,14 @@ class TravelAgentAPI {
 
             if (!response.ok) {
                 const errorText = await response.text();
+                if (response.status === 404) {
+                    throw new Error(`接口不存在(404): ${response.url || url}`);
+                }
                 try {
                     const errorData = JSON.parse(errorText);
-                    throw new Error(errorData.detail || errorData.error || '请求失败');
+                    throw new Error(errorData.detail || errorData.error || errorData.message || `请求失败(${response.status}): ${response.url || url}`);
                 } catch {
-                    throw new Error('请求失败: ' + errorText);
+                    throw new Error(`请求失败(${response.status}): ${response.url || url}\n${errorText}`);
                 }
             }
 

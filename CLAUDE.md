@@ -91,6 +91,8 @@ python 05_long_memory.py  # 长期记忆
 - PostgreSQL + pgvector 进行相似性搜索
 - 方法: `add_memory()`、`search_memories()`
 
+**async_run.py** - 后端程序启动入口
+
 ### 工具类
 
 **utils/db_util.py** - 数据库会话管理：
