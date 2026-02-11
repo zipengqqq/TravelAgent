@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
+from pojo.request.conversation_delete_request import ConversationDeleteRequest
 from pojo.request.conversation_list_request import ConversationListRequest
 from pojo.request.conversation_select_request import ConversationSelectRequest
 
@@ -56,6 +57,12 @@ async def list_conversations(request: ConversationListRequest):
 async def select_conversation(request: ConversationSelectRequest):
     """查看对话内容，即AI与用户的所有交互记录"""
     return build_response(await assistant_service.select_conversation(request.thread_id))
+
+
+@router.post("/conversation/delete", summary="删除对话")
+async def delete_conversation(request: ConversationDeleteRequest):
+    """删除对话，返回删除的记录数"""
+    return build_response(await assistant_service.delete_conversation(request))
 
 
 

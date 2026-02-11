@@ -9,6 +9,7 @@ from graph.async_workflow import async_workflow, compiled_async_workflow
 from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
+from pojo.request.conversation_delete_request import ConversationDeleteRequest
 from service.prompts import name_conversation_prompt
 from utils.db_util import create_session
 from utils.id_util import id_worker
@@ -191,6 +192,15 @@ class AssistantService:
                 "content": content
             })
         return result
+
+    async def delete_conversation(self, request: ConversationDeleteRequest):
+        """删除对话"""
+        with create_session() as session:
+            deleted_count = session.query(Conversation).filter(
+                Conversation.thread_id == request.thread_id
+            ).delete()
+            logger.info(f"删除对话: thread_id={request.thread_id}, deleted_count={deleted_count}")
+            return {"deleted_count": deleted_count}
 
     async def _generate_conversation_name(self, question):
         """给对话起名字"""
