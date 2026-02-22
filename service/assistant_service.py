@@ -6,6 +6,7 @@ from datetime import datetime
 from langchain_openai import ChatOpenAI
 
 from graph.async_workflow import async_workflow, compiled_async_workflow
+from graph.stream_callback import set_stream_queue
 from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
@@ -88,6 +89,9 @@ class AssistantService:
         queue = asyncio.Queue()
         workflow_done = False
 
+        # 使用 contextvars 设置 queue（避免放入 state 导致序列化失败）
+        set_stream_queue(queue)
+
         state = {
             "question": question,
             "plan": [],
@@ -96,8 +100,7 @@ class AssistantService:
             "route": "",
             "messages": [],
             "user_id": user_id,
-            "memories": [],
-            "queue": queue
+            "memories": []
         }
 
         config = {"configurable": {"thread_id": thread_id}}

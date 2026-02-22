@@ -13,7 +13,7 @@ from graph.prompts import (
     route_prompt, direct_answer_prompt, planner_prompt,
     search_query_prompt, reflect_prompt
 )
-from graph.stream_callback import create_streaming_llm
+from graph.stream_callback import create_streaming_llm, get_stream_queue
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
@@ -22,7 +22,7 @@ async def async_router_node(state: PlanExecuteState):
     """路由节点：判断意图"""
     logger.info("🚀路由师正在判断意图")
     question = state["question"]
-    queue = state.get("queue")
+    queue = get_stream_queue()
 
     prompt = route_prompt.format(
         user_request=question,
@@ -31,7 +31,7 @@ async def async_router_node(state: PlanExecuteState):
 
     # 使用流式 LLM
     if queue:
-        streaming_llm = create_streaming_llm("router", queue)
+        streaming_llm = create_streaming_llm("router")
         router_llm = streaming_llm.bind(temperature=0.0)
     else:
         router_llm = async_llm.bind(temperature=0.0)
@@ -56,7 +56,7 @@ async def async_direct_answer_node(state: PlanExecuteState):
     """直接回答：无需工具"""
     logger.info("🚀直接回答中")
     question = state["question"]
-    queue = state.get("queue")
+    queue = get_stream_queue()
 
     # 格式化对话历史
     messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
@@ -69,7 +69,7 @@ async def async_direct_answer_node(state: PlanExecuteState):
 
     # 使用流式 LLM
     if queue:
-        streaming_llm = create_streaming_llm("direct_answer", queue)
+        streaming_llm = create_streaming_llm("direct_answer")
         raw = await streaming_llm.ainvoke(prompt)
     else:
         raw = await async_llm.ainvoke(prompt)
@@ -84,7 +84,7 @@ async def async_planner_node(state: PlanExecuteState):
     """接收用户问题，生成初始计划"""
     logger.info("🚀规划师正在规划任务")
     question = state["question"]
-    queue = state.get("queue")
+    queue = get_stream_queue()
 
     # 格式化对话历史
     messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
@@ -97,7 +97,7 @@ async def async_planner_node(state: PlanExecuteState):
 
     # 使用流式 LLM
     if queue:
-        streaming_llm = create_streaming_llm("planner", queue)
+        streaming_llm = create_streaming_llm("planner")
         raw = await streaming_llm.ainvoke(prompt)
     else:
         raw = await async_llm.ainvoke(prompt)
@@ -158,7 +158,7 @@ async def async_reflect_node(state: PlanExecuteState):
         past_steps_str += f"已完成步骤：{step}\n执行结果：{result}\n"
 
     current_plan_str = "\n".join(state['plan'])
-    queue = state.get("queue")
+    queue = get_stream_queue()
 
     prompt = reflect_prompt.format(
         question=state['question'],
@@ -168,7 +168,7 @@ async def async_reflect_node(state: PlanExecuteState):
 
     # 使用流式 LLM
     if queue:
-        streaming_llm = create_streaming_llm("reflect", queue)
+        streaming_llm = create_streaming_llm("reflect")
         raw = await streaming_llm.ainvoke(prompt)
     else:
         raw = await async_llm.ainvoke(prompt)
