@@ -54,6 +54,7 @@ async def event_generator(request: Request):
     workflow_done = False
 
     async def run():
+        nonlocal workflow_done
         try:
             await run_workflow(queue)
         except Exception as e:
