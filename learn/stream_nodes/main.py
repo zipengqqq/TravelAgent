@@ -51,7 +51,7 @@ async def health_check():
 
 async def event_generator(request: Request):
     queue = asyncio.Queue()
-    workflow_done = asyncio.Event()
+    workflow_done = False
 
     async def run():
         try:
@@ -60,28 +60,34 @@ async def event_generator(request: Request):
             await queue.put({"type": "error", "data": {"message": str(e)}})
         finally:
             await queue.put({"type": "workflow_end"})
-            workflow_done.set()
+            workflow_done = True
 
     task = asyncio.create_task(run())
 
     try:
         while True:
+            # 1. 检查客户端是否断开连接
             if await request.is_disconnected():
                 task.cancel()
                 break
 
-            if workflow_done.is_set():
+            # 2. 检查工作流是否已完成
+            if workflow_done:
                 try:
+                    # 2a. 工作流已完成，快速取完队列中的剩余数据
                     event = queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
             else:
                 try:
+                    # 2b. 工作流还在执行，等待新数据（最多0.5秒）
                     event = await asyncio.wait_for(queue.get(), timeout=0.5)
                 except asyncio.TimeoutError:
+                    # 保持心跳连接
                     yield f": heartbeat\n\n"
                     continue
 
+            # 数据为token
             if event.get("type") == "token":
                 data = json.dumps({
                     "node": event.get("node"),
@@ -90,6 +96,7 @@ async def event_generator(request: Request):
                 })
                 yield f"data: {data}\n\n"
 
+            # 节点开始数据
             elif event.get("type") == "node_start":
                 data = json.dumps({
                     "node": event.get("node"),
@@ -98,6 +105,7 @@ async def event_generator(request: Request):
                 })
                 yield f"data: {data}\n\n"
 
+            # 节点结束数据
             elif event.get("type") == "node_end":
                 data = json.dumps({
                     "node": event.get("node"),
@@ -105,6 +113,7 @@ async def event_generator(request: Request):
                 })
                 yield f"data: {data}\n\n"
 
+            # 节点错误数据
             elif event.get("type") == "error":
                 data = json.dumps({
                     "message": event.get("data", {}).get("message", ""),
@@ -112,6 +121,7 @@ async def event_generator(request: Request):
                 })
                 yield f"data: {data}\n\n"
 
+            # 工作流结束数据
             elif event.get("type") == "workflow_end":
                 data = json.dumps({"event": "workflow_end"})
                 yield f"data: {data}\n\n"
