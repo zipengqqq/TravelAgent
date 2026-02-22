@@ -119,6 +119,7 @@ class PlanExecuteState(TypedDict):
     messages: Annotated[List[Tuple], operator.add]  # 对话历史
     user_id: int  # 用户id，当前固定为1
     memories: List[str]  # 长期记忆
+    queue: asyncio.Queue  # 用于 token 级别流式输出
 
 
 # 结构化输出模型

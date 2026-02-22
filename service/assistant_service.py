@@ -78,12 +78,15 @@ class AssistantService:
             logger.info("AssistantService 连接池已关闭")
 
     async def chat(self, request: ChatRequest):
-        """流式chatbox实现"""
+        """流式chatbox实现 - token 级别"""
         await self._ensure_initialized()
 
         question = request.question
         thread_id = request.thread_id
         user_id = request.user_id
+
+        queue = asyncio.Queue()
+        workflow_done = False
 
         state = {
             "question": question,
@@ -94,58 +97,70 @@ class AssistantService:
             "messages": [],
             "user_id": user_id,
             "memories": [],
-            "queue": asyncio.Queue()
+            "queue": queue
         }
 
         config = {"configurable": {"thread_id": thread_id}}
 
-        # 使用 astream 进行流式输出
-        async for event in self._app.astream(state, config=config):
-            # 提取每个节点的输出
-            for node_name, node_output in event.items():
-                if node_name == "__end__":
-                    # 流结束
+        # 后台运行工作流
+        async def run_workflow():
+            # nonlocal关键字，可以读取外部变量workflow_done并且修改它，如果不加这个关键字，那么workflow_node就不会被修改
+            nonlocal workflow_done
+            try:
+                async for event in self._app.astream(state, config=config):
+                    # 这里可以处理节点级别的事件（如果需要）
+                    pass
+            except Exception as e:
+                logger.error(f"工作流执行出错: {e}")
+                await queue.put({"type": "error", "data": {"message": str(e)}})
+            finally:
+                await queue.put({"type": "workflow_end"})
+                workflow_done = True
+
+        # 启动工作流任务
+        workflow_task = asyncio.create_task(run_workflow())
+
+        try:
+            while True:
+                # 检查是否结束
+                if workflow_done and queue.empty():
+                    break
+
+                # 从队列获取事件（token 或结束信号）
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    # 发送心跳保持连接
                     yield {
-                        "type": "end",
-                        "data": {
-                            "thread_id": thread_id,
-                            "response": node_output.get("response", ""),
-                            "route": node_output.get("route", ""),
-                            "memories": node_output.get("memories", []),
-                        }
+                        "type": "heartbeat",
+                        "data": {}
                     }
-                elif node_name == "router":
+                    continue
+
+                # 处理 token 事件
+                if event.get("type") == "token":
                     yield {
-                        "type": "node",
-                        "node": "router",
-                        "data": {"route": node_output.get("route", "")}
+                        "type": "token",
+                        "node": event.get("node"),
+                        "data": event.get("data", {})
                     }
-                elif node_name == "planner":
+                # 处理工作流结束
+                elif event.get("type") == "workflow_end":
                     yield {
-                        "type": "node",
-                        "node": "planner",
-                        "data": {"plan": node_output.get("plan", [])}
+                        "type": "workflow_end",
+                        "data": {}
                     }
-                elif node_name == "executor":
+                # 处理错误
+                elif event.get("type") == "error":
                     yield {
-                        "type": "node",
-                        "node": "executor",
-                        "data": {"past_step": node_output.get("past_step", None)}
+                        "type": "error",
+                        "data": event.get("data", {})
                     }
-                elif node_name == "reflect":
-                    response = node_output.get("response", "")
-                    if response:
-                        yield {
-                            "type": "chunk",
-                            "data": {"response": response}
-                        }
-                elif node_name == "direct_answer":
-                    response = node_output.get("response", "")
-                    if response:
-                        yield {
-                            "type": "chunk",
-                            "data": {"response": response}
-                        }
+        except asyncio.CancelledError:
+            workflow_task.cancel()
+        finally:
+            if not workflow_task.done():
+                workflow_task.cancel()
 
     async def add_conversation(self, request: ConversationAddRequest):
         """新增对话"""
