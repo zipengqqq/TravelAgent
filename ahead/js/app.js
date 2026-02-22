@@ -126,9 +126,23 @@ class ChatApp {
             await api.chatStream(
                 message,
                 (chunk) => {
-                    if (chunk.type === 'node') {
+                    if (chunk.type === 'token') {
+                        // Token 级别流式输出
+                        if (!receivedFirstChunk) {
+                            this.hideTypingIndicator();
+                            receivedFirstChunk = true;
+                        }
+
+                        const token = chunk.data?.content || '';
+                        assistantText += token;
+                        if (assistantContentEl) {
+                            assistantContentEl.innerHTML = this.formatMessage(assistantText);
+                        }
+                        this.scrollToBottom();
+                    } else if (chunk.type === 'node') {
                         console.log('Node:', chunk.node, chunk.data);
                     } else if (chunk.type === 'chunk') {
+                        // 兼容旧版 chunk 事件
                         if (chunk.data.response) {
                             if (!receivedFirstChunk) {
                                 this.hideTypingIndicator();
@@ -141,10 +155,14 @@ class ChatApp {
                             }
                             this.scrollToBottom();
                         }
+                    } else if (chunk.type === 'workflow_end') {
+                        console.log('Workflow end');
                     } else if (chunk.type === 'end') {
                         console.log('Stream end:', chunk.data);
                     } else if (chunk.type === 'error') {
                         console.error('Stream error:', chunk.data);
+                    } else if (chunk.type === 'heartbeat') {
+                        // 心跳，保持连接
                     }
                 },
                 () => {

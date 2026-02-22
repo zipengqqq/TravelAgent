@@ -154,7 +154,8 @@ class TravelAgentAPI {
                                 const chunk = JSON.parse(data);
                                 onChunk(chunk);
 
-                                if (chunk.type === 'end') {
+                                // 处理工作流结束
+                                if (chunk.type === 'workflow_end' || chunk.type === 'end') {
                                     onComplete();
                                     return;
                                 }
