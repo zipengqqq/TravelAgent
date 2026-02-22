@@ -1,3 +1,4 @@
+import asyncio
 import operator
 import os
 from typing import Annotated, List, Tuple, TypedDict
@@ -28,6 +29,7 @@ class PlanExecuteState(TypedDict):
     messages: Annotated[List[Tuple], operator.add] # 对话历史
     user_id: int # 用户id，当前固定为1
     memories: List[str] # 长期记忆
+    queue: asyncio.Queue # 队列
 
 
 class Plan(BaseModel):

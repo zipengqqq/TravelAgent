@@ -94,6 +94,7 @@ class AssistantService:
             "messages": [],
             "user_id": user_id,
             "memories": [],
+            "queue": asyncio.Queue()
         }
 
         config = {"configurable": {"thread_id": thread_id}}

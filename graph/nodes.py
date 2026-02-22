@@ -1,22 +1,24 @@
 import json
 
-from graph.config import PlanExecuteState, tavily_tool, Response, Plan
-from graph.config import llm
+from graph.config import PlanExecuteState, tavily_tool, Response, Plan, llm
 from graph.function import abstract
 from graph.memory_rag import memory_rag
 from graph.prompts import route_prompt, direct_answer_prompt, planner_prompt, search_query_prompt, reflect_prompt
+from graph.stream_callback import create_streaming_llm
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
-def router_node(state: PlanExecuteState):
+def router_node(state: PlanExecuteState, queue):
     """路由节点：判断意图"""
     logger.info("🚀路由师正在判断意图")
     question = state["question"]
+    queue = state['queue']
 
     prompt = route_prompt.format(
         user_request=question,
         memories=state.get("memories", [])
     )
+    llm = create_streaming_llm("router", queue)
     router_llm = llm.bind(temperature=0.0)
     raw = router_llm.invoke(prompt)
     try:
@@ -38,6 +40,8 @@ def direct_answer_node(state: PlanExecuteState):
     """直接回答：无需工具"""
     logger.info("🚀直接回答中")
     question = state["question"]
+    queue = state["queue"]
+    llm = create_streaming_llm("direct_answer", queue)
 
     # 格式化对话历史
     messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
@@ -55,6 +59,8 @@ def planner_node(state: PlanExecuteState):
     """接收用户问题，生成初始计划"""
     logger.info("🚀规划师正在规划任务")
     question = state["question"]
+    queue = state["queue"]
+    llm = create_streaming_llm("planner", queue)
 
     # 格式化对话历史
     messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
@@ -129,6 +135,8 @@ def reflect_node(state: PlanExecuteState):
         current_plan=current_plan_str,
     )
 
+    queue = state["queue"]
+    llm = create_streaming_llm("reflect", queue)
     raw = llm.invoke(prompt)
     try:
         data = parse_llm_json(raw.content)
