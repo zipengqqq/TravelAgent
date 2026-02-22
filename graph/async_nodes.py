@@ -22,19 +22,14 @@ async def async_router_node(state: PlanExecuteState):
     """路由节点：判断意图"""
     logger.info("🚀路由师正在判断意图")
     question = state["question"]
-    queue = get_stream_queue()
 
     prompt = route_prompt.format(
         user_request=question,
         memories=state.get("memories", [])
     )
 
-    # 使用流式 LLM
-    if queue:
-        streaming_llm = create_streaming_llm("router")
-        router_llm = streaming_llm.bind(temperature=0.0)
-    else:
-        router_llm = async_llm.bind(temperature=0.0)
+    # 路由器节点不使用流式输出（只是意图分类，不需要显示给用户）
+    router_llm = async_llm.bind(temperature=0.0)
 
     raw = await router_llm.ainvoke(prompt)
     try:
