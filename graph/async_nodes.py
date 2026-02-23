@@ -112,12 +112,7 @@ async def async_planner_node(state: PlanExecuteState):
         memories=state.get("memories", [])
     )
 
-    # 使用流式 LLM
-    if queue:
-        streaming_llm = create_streaming_llm("planner")
-        raw = await streaming_llm.ainvoke(prompt)
-    else:
-        raw = await async_llm.ainvoke(prompt)
+    raw = await async_llm.ainvoke(prompt)
 
     try:
         data = parse_llm_json(raw.content)
