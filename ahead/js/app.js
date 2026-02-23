@@ -21,6 +21,8 @@ class ChatApp {
         this.conversations = [];
         this.activeConversationId = null;
         this.welcomeTemplate = '';
+        this.currentStatusPanel = null;
+        this.currentStatusList = [];
 
         this.init();
     }
@@ -115,6 +117,9 @@ class ChatApp {
         this.addMessage(message, 'user');
         this.isTyping = true;
 
+        // 创建状态面板
+        this.createStatusPanel();
+
         this.showTypingIndicator();
 
         try {
@@ -140,7 +145,8 @@ class ChatApp {
                         }
                         this.scrollToBottom();
                     } else if (chunk.type === 'node') {
-                        console.log('Node:', chunk.node, chunk.data);
+                        // 更新状态面板
+                        this.updateStatusPanel(chunk.node, chunk.data);
                     } else if (chunk.type === 'chunk') {
                         // 兼容旧版 chunk 事件
                         if (chunk.data.response) {
@@ -157,6 +163,7 @@ class ChatApp {
                         }
                     } else if (chunk.type === 'workflow_end') {
                         console.log('Workflow end');
+                        this.finishStatusPanel();
                     } else if (chunk.type === 'end') {
                         console.log('Stream end:', chunk.data);
                     } else if (chunk.type === 'error') {
@@ -180,6 +187,8 @@ class ChatApp {
                     }
                     this.isTyping = false;
                     this.handleInput();
+                    this.currentStatusPanel = null;
+                    this.currentStatusList = [];
                 },
                 conversation.threadId
             );
@@ -188,6 +197,8 @@ class ChatApp {
             this.addErrorMessage(error.message || '发送消息时出错');
             this.isTyping = false;
             this.handleInput();
+            this.currentStatusPanel = null;
+            this.currentStatusList = [];
         }
     }
 
@@ -509,6 +520,139 @@ class ChatApp {
 
     closeSidebar() {
         document.body.classList.remove('sidebar-open');
+    }
+
+    /**
+     * 创建状态面板
+     */
+    createStatusPanel() {
+        this.currentStatusList = [];
+
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'agent-status';
+
+        const header = document.createElement('div');
+        header.className = 'status-header';
+        header.innerHTML = `
+            <div class="status-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+            </div>
+            <span class="status-title">AI 运行状态</span>
+            <div class="status-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                </svg>
+            </div>
+        `;
+
+        const content = document.createElement('div');
+        content.className = 'status-content';
+        content.innerHTML = '<ul class="status-list"></ul>';
+
+        // 点击展开/折叠
+        header.addEventListener('click', () => {
+            header.classList.toggle('expanded');
+        });
+
+        statusDiv.appendChild(header);
+        statusDiv.appendChild(content);
+
+        // 插入到用户消息之后
+        const messages = this.messagesContainer.querySelectorAll('.message');
+        const lastUserMessage = Array.from(messages).filter(m => m.classList.contains('user')).pop();
+        if (lastUserMessage) {
+            lastUserMessage.after(statusDiv);
+        } else {
+            this.messagesContainer.appendChild(statusDiv);
+        }
+
+        this.currentStatusPanel = { header, content, list: content.querySelector('.status-list') };
+        this.scrollToBottom();
+    }
+
+    /**
+     * 更新状态面板
+     */
+    updateStatusPanel(node, data) {
+        if (!this.currentStatusPanel) return;
+
+        const statusNames = {
+            'memory_retrieve': '检索记忆',
+            'router': '意图识别',
+            'planner': '生成规划',
+            'executor': '执行搜索',
+            'reflect': '反思评估',
+            'direct_answer': '直接回答',
+            'memory_save': '保存记忆',
+            'profile': '更新画像'
+        };
+
+        const statusName = statusNames[node] || node;
+        const statusText = data?.status || data?.message || statusName;
+
+        // 检查是否已存在该节点
+        const existingIndex = this.currentStatusList.findIndex(s => s.node === node);
+        if (existingIndex >= 0) {
+            // 更新现有状态
+            const item = this.currentStatusPanel.list.children[existingIndex];
+            if (item) {
+                item.querySelector('.status-item-text').textContent = statusText;
+                item.classList.remove('active', 'completed');
+                item.classList.add('active');
+            }
+        } else {
+            // 添加新状态
+            this.currentStatusList.push({ node, status: statusText });
+
+            const li = document.createElement('li');
+            li.className = 'status-item active';
+            li.innerHTML = `
+                <span class="status-item-dot"></span>
+                <span class="status-item-text">${statusText}</span>
+            `;
+            this.currentStatusPanel.list.appendChild(li);
+        }
+
+        // 如果状态表示完成
+        if (data?.completed) {
+            const item = this.currentStatusPanel.list.children[this.currentStatusList.length - 1];
+            if (item) {
+                item.classList.remove('active');
+                item.classList.add('completed');
+            }
+        }
+
+        this.scrollToBottom();
+    }
+
+    /**
+     * 结束状态面板
+     */
+    finishStatusPanel() {
+        if (!this.currentStatusPanel) return;
+
+        // 标记所有状态为完成
+        const items = this.currentStatusPanel.list.querySelectorAll('.status-item');
+        items.forEach(item => {
+            item.classList.remove('active');
+            item.classList.add('completed');
+        });
+
+        // 更新图标为完成状态
+        const icon = this.currentStatusPanel.header.querySelector('.status-icon');
+        icon.classList.remove('idle');
+        icon.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9 12l2 2 4-4"/>
+            </svg>
+        `;
+
+        this.currentStatusPanel = null;
+        this.currentStatusList = [];
     }
 }
 

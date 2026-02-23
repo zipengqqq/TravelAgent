@@ -830,3 +830,142 @@ body.sidebar-open .sidebar-backdrop {
     background-color: var(--accent);
     color: white;
 }
+
+/* AI 状态面板 */
+.agent-status {
+    margin-bottom: 16px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.status-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    user-select: none;
+}
+
+.status-header:hover {
+    background-color: rgba(29, 29, 31, 0.04);
+}
+
+.status-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.status-icon svg {
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+    animation: spin 1s linear infinite;
+}
+
+.status-icon.idle svg {
+    animation: none;
+    color: var(--text-tertiary);
+}
+
+.status-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.status-toggle {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    transition: transform 0.2s ease;
+}
+
+.status-toggle svg {
+    width: 14px;
+    height: 14px;
+}
+
+.status-header.expanded .status-toggle {
+    transform: rotate(180deg);
+}
+
+.status-content {
+    display: none;
+    padding: 12px 14px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.status-header.expanded + .status-content {
+    display: block;
+}
+
+.status-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.status-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.status-item.completed {
+    color: #34C759;
+}
+
+.status-item.active {
+    color: var(--accent);
+}
+
+.status-item-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-tertiary);
+    margin-top: 5px;
+    flex-shrink: 0;
+}
+
+.status-item.completed .status-item-dot {
+    background-color: #34C759;
+}
+
+.status-item.active .status-item-dot {
+    background-color: var(--accent);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+.status-item-text {
+    flex: 1;
+    line-height: 1.4;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

@@ -10,7 +10,8 @@
       "Bash(PYTHONPATH=. python:*)",
       "Bash(pip install:*)",
       "Bash(playwright install:*)",
-      "Bash(nvidia-smi:*)"
+      "Bash(nvidia-smi:*)",
+      "WebFetch(domain:minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com)"
     ]
   }
 }
