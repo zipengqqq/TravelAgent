@@ -11,7 +11,8 @@
       "Bash(pip install:*)",
       "Bash(playwright install:*)",
       "Bash(nvidia-smi:*)",
-      "WebFetch(domain:minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com)"
+      "WebFetch(domain:minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com)",
+      "mcp__MiniMax__understand_image"
     ]
   }
 }

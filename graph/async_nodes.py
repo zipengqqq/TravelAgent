@@ -164,12 +164,15 @@ async def async_executor_node(state: PlanExecuteState):
     result_str = await async_abstract(result_str)
     logger.info(f"摘要长度为: {len(result_str)}")
 
+    # 计算当前任务序号：已完成任务数 + 1
+    current_task_num = len(state.get('past_steps', [])) + 1
+
     # 返回给前端，当前正在执行的任务
     queue = get_stream_queue()
     await queue.put({
         "type": "status",
         "node": "executor",
-        "data": {"status": f"当前正在执行任务：{task}"}
+        "data": {"status": f"当前正在执行任务{current_task_num}：{task}"}
     })
 
     return {
