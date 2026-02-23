@@ -122,7 +122,15 @@ async def async_planner_node(state: PlanExecuteState):
     except Exception as e:
         logger.error(f"规划解析失败：{e}")
         steps = []
-    logger.info(f"共有 {len(steps)} 个步骤")
+
+    # 将状态返回给前端
+    await queue.put({
+        "type": "status",
+        "node": "planner",
+        "data": {"status": f"规划完成，共有 {len(steps)} 个步骤"}
+    })
+
+    logger.info(f"共有 {len(steps)} 个任务")
     return {"plan": steps}
 
 
@@ -145,7 +153,7 @@ async def async_executor_node(state: PlanExecuteState):
     # 2）异步调用 Tavily 工具
     try:
         search_result = await async_tavily_tool.ainvoke(search_query)
-        logger.info(f"搜索结果：{search_result}")
+        # logger.info(f"搜索结果：{search_result}")
         result_str = json.dumps(search_result, ensure_ascii=False)
     except Exception as e:
         logger.error(f"搜索失败：{e}")
@@ -155,6 +163,14 @@ async def async_executor_node(state: PlanExecuteState):
     # 3）异步提取摘要
     result_str = await async_abstract(result_str)
     logger.info(f"摘要长度为: {len(result_str)}")
+
+    # 返回给前端，当前正在执行的任务
+    queue = get_stream_queue()
+    await queue.put({
+        "type": "status",
+        "node": "executor",
+        "data": {"status": f"当前正在执行任务：{task}"}
+    })
 
     return {
         "past_steps": [(task, result_str)],
