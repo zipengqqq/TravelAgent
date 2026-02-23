@@ -159,7 +159,7 @@ class AssistantService:
                 elif event.get("type") == "status": # 处理状态
                     yield {
                         "type": "status",
-                        "data": event.get("data", "")
+                        "data": event.get("data", {})
                     }
 
         except asyncio.CancelledError:

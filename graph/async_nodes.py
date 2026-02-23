@@ -48,7 +48,7 @@ async def async_router_node(state: PlanExecuteState):
     queue = get_stream_queue()
     await queue.put({
         "type": "status",
-        "data": {"status": f"当前用户意图为{route}"}
+        "data": {"status": f"当前用户意图为直接问答"}
     })
 
     return {"route": route}
