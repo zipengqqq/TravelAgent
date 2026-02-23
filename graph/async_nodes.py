@@ -28,7 +28,6 @@ async def async_router_node(state: PlanExecuteState):
         memories=state.get("memories", [])
     )
 
-    # 路由器节点不使用流式输出（只是意图分类，不需要显示给用户）
     router_llm = async_llm.bind(temperature=0.0)
 
     raw = await router_llm.ainvoke(prompt)
@@ -44,6 +43,14 @@ async def async_router_node(state: PlanExecuteState):
         route = "direct_answer"
 
     logger.info(f"用户意图：{route}")
+
+    # 发送状态
+    queue = get_stream_queue()
+    await queue.put({
+        "type": "status",
+        "data": {"status": f"当前用户意图为{route}"}
+    })
+
     return {"route": route}
 
 
@@ -52,6 +59,13 @@ async def async_direct_answer_node(state: PlanExecuteState):
     logger.info("🚀直接回答中")
     question = state["question"]
     queue = get_stream_queue()
+
+    # 发送状态
+    await queue.put({
+        "type": "status",
+        "node": "direct_answer",
+        "data": {"status": "正在生成回答..."}
+    })
 
     # 格式化对话历史
     messages = "\n".join([f"{role}: {msg}" for role, msg in state["messages"]])
@@ -68,6 +82,13 @@ async def async_direct_answer_node(state: PlanExecuteState):
         raw = await streaming_llm.ainvoke(prompt)
     else:
         raw = await async_llm.ainvoke(prompt)
+
+    # 发送状态
+    await queue.put({
+        "type": "status",
+        "node": "direct_answer",
+        "data": {"status": "回答生成完成"}
+    })
 
     return {
         "response": raw.content,

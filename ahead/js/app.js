@@ -144,9 +144,11 @@ class ChatApp {
                             assistantContentEl.innerHTML = this.formatMessage(assistantText);
                         }
                         this.scrollToBottom();
-                    } else if (chunk.type === 'node') {
-                        // 更新状态面板
-                        this.updateStatusPanel(chunk.node, chunk.data);
+                    } else if (chunk.type === 'status') {
+                        // AI 状态更新
+                        if (chunk.node) {
+                            this.updateStatusPanel(chunk.node, chunk.data);
+                        }
                     } else if (chunk.type === 'chunk') {
                         // 兼容旧版 chunk 事件
                         if (chunk.data.response) {
@@ -209,15 +211,10 @@ class ChatApp {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
 
-        const avatar = document.createElement('div');
-        avatar.className = 'message-avatar';
-        avatar.textContent = type === 'user' ? '👤' : '🤖';
-
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
         messageContent.innerHTML = this.formatMessage(content);
 
-        messageDiv.appendChild(avatar);
         messageDiv.appendChild(messageContent);
 
         this.messagesContainer.appendChild(messageDiv);
@@ -540,7 +537,7 @@ class ChatApp {
                     <path d="M12 6v6l4 2"/>
                 </svg>
             </div>
-            <span class="status-title">AI 运行状态</span>
+            <span class="status-title">思考中</span>
             <div class="status-toggle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M6 9l6 6 6-6"/>
@@ -644,6 +641,7 @@ class ChatApp {
         // 更新图标为完成状态
         const icon = this.currentStatusPanel.header.querySelector('.status-icon');
         icon.classList.remove('idle');
+        icon.classList.add('completed');
         icon.innerHTML = `
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/>

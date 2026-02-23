@@ -140,25 +140,28 @@ class AssistantService:
                     }
                     continue
 
-                # 处理 token 事件
-                if event.get("type") == "token":
+                if event.get("type") == "token": # 处理 token 事件
                     yield {
                         "type": "token",
                         "node": event.get("node"),
                         "data": event.get("data", {})
                     }
-                # 处理工作流结束
-                elif event.get("type") == "workflow_end":
+                elif event.get("type") == "workflow_end": # 处理工作流结束
                     yield {
                         "type": "workflow_end",
                         "data": {}
                     }
-                # 处理错误
-                elif event.get("type") == "error":
+                elif event.get("type") == "error": # 处理错误
                     yield {
                         "type": "error",
                         "data": event.get("data", {})
                     }
+                elif event.get("type") == "status": # 处理状态
+                    yield {
+                        "type": "status",
+                        "data": event.get("data", "")
+                    }
+
         except asyncio.CancelledError:
             workflow_task.cancel()
         finally:
