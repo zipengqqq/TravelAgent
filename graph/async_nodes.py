@@ -46,9 +46,10 @@ async def async_router_node(state: PlanExecuteState):
 
     # 发送状态
     queue = get_stream_queue()
+    route_text = "直接问答" if route == "direct_answer" else "规划任务"
     await queue.put({
         "type": "status",
-        "data": {"status": f"当前用户意图为直接问答"}
+        "data": {"status": f"当前用户意图为{route_text}"}
     })
 
     return {"route": route}
@@ -120,7 +121,7 @@ async def async_planner_node(state: PlanExecuteState):
 
     try:
         data = parse_llm_json(raw.content)
-        parsed = Plan.model_validate(data)
+        parsed = Plan.parse_obj(data)
         steps = parsed.steps
         logger.info(f"规划结果：{steps}")
     except Exception as e:
@@ -192,7 +193,7 @@ async def async_reflect_node(state: PlanExecuteState):
     try:
         data = parse_llm_json(raw.content)
         logger.info(f"大模型结果为：{data}")
-        result = Response.model_validate(data)
+        result = Response.parse_obj(data)
     except Exception as e:
         logger.error(f"反思节点解析失败：{e}")
         result = Response(response="", next_plan=[])
