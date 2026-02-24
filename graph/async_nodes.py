@@ -11,7 +11,7 @@ from graph.async_function import async_abstract
 from graph.async_memory_rag import async_memory_rag
 from graph.prompts import (
     route_prompt, direct_answer_prompt, planner_prompt,
-    search_query_prompt, reflect_prompt
+    search_query_prompt, plan_summary_prompt
 )
 from graph.stream_callback import create_streaming_llm, get_stream_queue
 from utils.logger_util import logger
@@ -140,9 +140,6 @@ async def async_planner_node(state: PlanExecuteState):
 async def async_executor_node(state: PlanExecuteState):
     """执行者：取出计划中的第一个任务"""
     plan = state['plan']
-    if not plan:
-        logger.error("计划为空")
-        return {"past_steps": [], "response": ""}
     task = plan[0]
 
     logger.info(f"🚀执行者正在执行任务：{task}")
@@ -185,20 +182,21 @@ async def async_executor_node(state: PlanExecuteState):
     }
 
 
-async def async_reflect_node(state: PlanExecuteState):
-    """重新规划器：根据执行结果，判断是否需要重新规划"""
-    logger.info(f"🚀反思节点正在判断是否需要重新规划")
+async def async_summary_node(state: PlanExecuteState):
+    """总结计划"""
+    if state['plan']:
+        logger.info("计划存在，继续循环")
+        return {"response": ""}
+
     past_steps_str = ""
     for step, result in state['past_steps']:
         past_steps_str += f"已完成步骤：{step}\n执行结果：{result}\n"
 
-    current_plan_str = "\n".join(state['plan'])
     queue = get_stream_queue()
 
-    prompt = reflect_prompt.format(
+    prompt = plan_summary_prompt.format(
         question=state['question'],
-        past_steps=past_steps_str,
-        current_plan=current_plan_str,
+        past_steps=past_steps_str
     )
 
     # 使用流式 LLM
@@ -211,24 +209,17 @@ async def async_reflect_node(state: PlanExecuteState):
     try:
         data = parse_llm_json(raw.content)
         logger.info(f"大模型结果为：{data}")
-        result = Response.parse_obj(data)
+        response = data.get("response", "")
     except Exception as e:
-        logger.error(f"反思节点解析失败：{e}")
-        result = Response(response="", next_plan=[])
+        logger.error(f"计划总结节点解析失败：{e}")
+        response = ""
 
-    if result.response and result.response.strip() != "":
-        logger.info("任务完成，生成最终回答。")
-        return {
-            "response": result.response,
-            "plan": [],
-            "messages": [("user", state['question']), ("assistant", result.response)]
-        }
-    else:
-        # 直接使用原计划的剩余部分，不再让 LLM 修改任务
-        remaining_plan = state['plan']
-        logger.info(f"反思节点决策：继续执行，剩余计划：{len(remaining_plan)}个步骤")
-        logger.info(f"剩余计划：{remaining_plan}")
-        return {"plan": remaining_plan}
+    logger.info("任务完成，生成最终回答。")
+    return {
+        "response": response,
+        "messages": [("user", state['question']), ("assistant", response)]
+    }
+
 
 
 async def async_memory_retrieve_node(state: PlanExecuteState):
