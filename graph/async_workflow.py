@@ -13,7 +13,7 @@ from graph.async_nodes import (
     async_planner_node,
     async_executor_node,
     async_direct_answer_node,
-    async_summary_node,
+    async_plan_summary_node,
     async_memory_retrieve_node,
     async_memory_save_node
 )
@@ -25,7 +25,7 @@ async_workflow = StateGraph(PlanExecuteState)
 async_workflow.add_node("router", async_router_node)
 async_workflow.add_node("planner", async_planner_node)
 async_workflow.add_node("executor", async_executor_node)
-async_workflow.add_node("summary", async_summary_node)
+async_workflow.add_node("plan_summary", async_plan_summary_node)
 async_workflow.add_node("direct_answer", async_direct_answer_node)
 async_workflow.add_node("memory_retrieve", async_memory_retrieve_node)
 async_workflow.add_node("memory_save", async_memory_save_node)
@@ -52,11 +52,11 @@ async_workflow.add_edge("memory_save", END)
 
 # planner 流程
 async_workflow.add_edge("planner", "executor")  # 规划 -> 执行者
-async_workflow.add_edge("executor", "summary")  # 执行者 -> 总结
+async_workflow.add_edge("executor", "plan_summary")  # 执行者 -> 计划总结
 
 # 总结条件分支
 async_workflow.add_conditional_edges(
-    "summary",  # 从总结节点出来
+    "plan_summary",  # 从计划总结节点出来
     async_should_end,  # 判断是否结束
     {
         True: "memory_save",  # 如果返回 True，流程结束

@@ -182,7 +182,7 @@ async def async_executor_node(state: PlanExecuteState):
     }
 
 
-async def async_summary_node(state: PlanExecuteState):
+async def async_plan_summary_node(state: PlanExecuteState):
     """总结计划"""
     if state['plan']:
         logger.info("计划存在，继续循环")
@@ -206,13 +206,8 @@ async def async_summary_node(state: PlanExecuteState):
     else:
         raw = await async_llm.ainvoke(prompt)
 
-    try:
-        data = parse_llm_json(raw.content)
-        logger.info(f"大模型结果为：{data}")
-        response = data.get("response", "")
-    except Exception as e:
-        logger.error(f"计划总结节点解析失败：{e}")
-        response = ""
+    response = raw.content
+    logger.info(f"大模型结果为：{response}")
 
     logger.info("任务完成，生成最终回答。")
     return {
