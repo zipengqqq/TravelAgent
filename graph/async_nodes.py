@@ -134,6 +134,17 @@ async def async_planner_node(state: PlanExecuteState):
     })
 
     logger.info(f"共有 {len(steps)} 个任务")
+
+    # 发送规划到前端
+    queue = get_stream_queue()
+    await queue.put({
+        "type": "approve_plan",
+        "data": {
+            "plan": steps,
+            "message": "请确认以下旅行规划"
+        }
+    })
+
     return {"plan": steps}
 
 
