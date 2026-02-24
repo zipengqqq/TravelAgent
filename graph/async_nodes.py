@@ -5,7 +5,7 @@
 """
 
 import json
-
+from contextvars import ContextVar
 from graph.async_config import PlanExecuteState, async_llm, Response, Plan, async_tavily_tool
 from graph.async_function import async_abstract
 from graph.async_memory_rag import async_memory_rag
@@ -17,6 +17,9 @@ from graph.stream_callback import create_streaming_llm, get_stream_queue
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
+
+# 使用 contextvar 存储任务序号
+_task_num: ContextVar[int] = ContextVar('task_num', default=0)
 
 async def async_router_node(state: PlanExecuteState):
     """路由节点：判断意图"""
@@ -123,12 +126,12 @@ async def async_planner_node(state: PlanExecuteState):
         logger.error(f"规划解析失败：{e}")
         steps = []
 
-    # 将状态返回给前端
-    await queue.put({
-        "type": "status",
-        "node": "planner",
-        "data": {"status": f"规划完成，共有 {len(steps)} 个步骤"}
-    })
+    # # 将状态返回给前端
+    # await queue.put({
+    #     "type": "status",
+    #     "node": "planner",
+    #     "data": {"status": f"规划完成，共有 {len(steps)} 个步骤"}
+    # })
 
     logger.info(f"共有 {len(steps)} 个任务")
     return {"plan": steps}
@@ -168,11 +171,12 @@ async def async_executor_node(state: PlanExecuteState):
     current_task_num = len(state.get('past_steps', [])) + 1
 
     # 返回给前端，当前正在执行的任务
+    _task_num.set(_task_num.get() + 1)
     queue = get_stream_queue()
     await queue.put({
         "type": "status",
         "node": "executor",
-        "data": {"status": f"当前正在执行任务{current_task_num}：{task}"}
+        "data": {"status": f"当前正在执行任务{_task_num.get()}：{task}"}
     })
 
     return {
