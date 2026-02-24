@@ -23,6 +23,9 @@ source "C:/Users/apeng/anaconda3/etc/profile.d/conda.sh" && conda activate trave
 ## 运行应用
 
 ```bash
+# FastAPI 主应用（生产环境推荐）
+python main.py
+
 # 主旅行规划智能体（同步版本）
 python graph/sync_run.py
 
@@ -30,12 +33,12 @@ python graph/sync_run.py
 python async_run.py
 
 # MCP 示例（MCP + LangGraph 集成）
-cd learn/mcps
+cd learn/mcp/local
 python mcp_agent_demo.py
 
 # ReAct 模式示例
 cd learn/react
-python map.py
+python main.py
 
 # 持久化示例（各种状态管理模式）
 cd learn/persistence
@@ -55,7 +58,7 @@ python main.py
 项目实现了 **规划-执行（Plan-and-Execute）** 多智能体系统，工作流程如下：
 
 ```
-记忆检索 → 路由器 → 规划器 → 执行器 → 反思器 → 记忆保存 → (循环回执行器或结束)
+记忆检索 → 路由器 → 规划器 → 执行器 → 计划总结 → 记忆保存 → (循环回执行器或结束)
                         ↓
                    直接回答（针对非规划查询）
 ```
@@ -87,7 +90,7 @@ python main.py
 - `router`: 意图分类
 - `planner`: 生成规划
 - `executor`: 执行搜索
-- `reflect`: 反思评估
+- `plan_summary`: 计划总结（反思评估）
 - `direct_answer`: 直接回答
 - `memory_save`: 记忆保存
 
@@ -209,20 +212,45 @@ graph/                    # 主智能体工作流
 
 learn/
 ├── stream_nodes/         # Token 级别流式输出示例
-├── persistence/         # 持久化示例
-├── react/               # ReAct 模式示例
-└── mcp/                 # MCP 协议集成示例
+│   ├── main.py           # SSE 流式服务
+│   └── workflow.py       # 节点级流式工作流
+├── persistence/          # 持久化示例
+│   ├── 01_load_to_db.py  # SQLite 持久化
+│   ├── 02_interupt.py    # 处理中断
+│   ├── 03_go_on.py       # 继续工作流
+│   ├── 04_time_back.py   # 时间旅行
+│   └── 05_long_memory.py # 长期记忆
+├── react/                # ReAct 模式示例
+│   └── main.py           # ReAct 智能体实现
+└── mcp/                  # MCP 协议集成
+    ├── local/             # 本地 MCP 服务器
+    │   ├── mcp_agent_demo.py
+    │   └── pg_server.py
+    ├── remote/            # 远程 MCP 工具
+    │   ├── bing.py
+    │   ├── map.py
+    │   └── 12306.py
+    └── rednote/           # 小红书 MCP
+
+main.py                   # FastAPI 主应用入口
+async_run.py              # 异步运行脚本（带 Windows 兼容）
 
 api/                      # 路由层
-service/                 # 业务层
-pojo/                    # 实体类层
-├── entity/              # 数据库实体
-└── request/             # 请求参数
-utils/                   # 工具类
-tests/                   # 测试文件
-docs/                    # 技术文档
-ahead/                   # 前端页面
-logs/                    # 应用日志
+service/                  # 业务层
+pojo/                     # 实体类层
+├── entity/               # 数据库实体
+└── request/              # 请求参数
+utils/                    # 工具类
+tests/                    # 测试文件
+docs/                     # 技术文档
+ahead/                    # 前端页面
+│   ├── index.html        # 聊天界面
+│   ├── js/
+│   │   ├── app.js        # 前端逻辑
+│   │   └── api.js        # API 调用封装
+│   └── css/
+│       └── style.css     # 样式文件
+logs/                     # 应用日志
 ```
 
 ## 关键技术
@@ -237,6 +265,25 @@ logs/                    # 应用日志
 - **HuggingFace Embeddings**: 本地向量嵌入（BAAI/bge-m3）
 - **MCP 协议**: 标准化工具调用
 - **Loguru**: 结构化日志
+- **httpx**: 异步 HTTP 客户端
+- **ContextVar**: 线程安全的上下文变量（用于流式输出）
+
+## 前端实现
+
+`ahead/` 目录包含完整的聊天界面：
+
+| 文件 | 说明 |
+|------|------|
+| `index.html` | 主聊天界面（TravelAssistant 智能旅行助手） |
+| `js/app.js` | 前端逻辑（消息处理、事件监听） |
+| `js/api.js` | API 调用封装（SSE 连接管理） |
+| `css/style.css` | 样式文件 |
+
+**前端特性：**
+- 左侧边栏（历史对话列表）
+- 欢迎页面（功能介绍）
+- SSE 流式接收消息
+- Shift+Enter 换行发送
 
 ## 流式输出实现
 
@@ -258,8 +305,19 @@ logs/                    # 应用日志
 ## MCP 集成
 
 `learn/mcp/` 目录包含完整的 MCP 学习指南和实现：
-- `local/`: 本地 MCP 服务器（PostgreSQL）
-- `remote/`: 远程 MCP 工具集成（必应搜索、地图、12306）
+
+**本地 MCP (`learn/mcp/local/`):**
+- `mcp_agent_demo.py`: MCP + LangGraph 入门示例
+- `pg_server.py`: PostgreSQL MCP 服务器实现
+
+**远程 MCP (`learn/mcp/remote/`):**
+- `bing.py`: 必应搜索 MCP 客户端（使用 npx bing-cn-mcp）
+- `map.py`: 地图 MCP 工具
+- `12306.py`: 12306 火车票 MCP 工具
+
+**小红书 MCP (`learn/mcp/rednote/`):**
+- 集成小红书内容搜索功能
+- 使用 `uvx --from xiaohongshu-automation xhs-mcp` 调用
 
 ## 环境变量
 
@@ -331,9 +389,13 @@ pytest tests/test_long_memory_integration.py
 
 项目包含丰富的技术文档，位于 `docs/` 目录：
 
-- `long_memory_implementation.md`: 长期记忆实现详解
-- `streaming_optimization.md`: 流式输出优化
-- `token_streaming_plan.md`: Token 流式输出方案
-- `contextvar_tutorial.md`: ContextVar 教程
-- `conversation_interface.md`: 对话接口设计
-- `windows_psycopg_async_fix.md`: Windows asyncpg 兼容性问题修复
+- `long_memory_implementation.md`: 长期记忆实现详解（11步实施计划）
+- `conversation_interface.md`: 对话接口设计说明
+
+## 主应用入口
+
+**main.py** - FastAPI 主应用入口，集成了对话 API 和生命周期管理：
+
+- 自动管理应用启动和关闭事件
+- 集成所有路由层和服务层
+- 支持 SSE 流式输出
