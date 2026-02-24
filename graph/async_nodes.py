@@ -126,12 +126,12 @@ async def async_planner_node(state: PlanExecuteState):
         logger.error(f"规划解析失败：{e}")
         steps = []
 
-    # # 将状态返回给前端
-    # await queue.put({
-    #     "type": "status",
-    #     "node": "planner",
-    #     "data": {"status": f"规划完成，共有 {len(steps)} 个步骤"}
-    # })
+    # 将状态返回给前端
+    await queue.put({
+        "type": "status",
+        "node": "planner",
+        "data": {"status": f"规划完成，共有 {len(steps)} 个步骤"}
+    })
 
     logger.info(f"共有 {len(steps)} 个任务")
     return {"plan": steps}
@@ -224,9 +224,11 @@ async def async_reflect_node(state: PlanExecuteState):
             "messages": [("user", state['question']), ("assistant", result.response)]
         }
     else:
-        logger.info(f"反思节点决策：继续执行，剩余计划：{len(result.next_plan)}个步骤")
-        logger.info(f"剩余计划：{result.next_plan}")
-        return {"plan": result.next_plan}
+        # 直接使用原计划的剩余部分，不再让 LLM 修改任务
+        remaining_plan = state['plan']
+        logger.info(f"反思节点决策：继续执行，剩余计划：{len(remaining_plan)}个步骤")
+        logger.info(f"剩余计划：{remaining_plan}")
+        return {"plan": remaining_plan}
 
 
 async def async_memory_retrieve_node(state: PlanExecuteState):
