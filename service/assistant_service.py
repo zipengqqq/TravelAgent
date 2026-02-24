@@ -50,7 +50,20 @@ class AssistantService:
                     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
                     from psycopg_pool import AsyncConnectionPool
 
-                    self._pool = AsyncConnectionPool(db_uri, kwargs={"autocommit": True}, min_size=2, max_size=10)
+                    # 配置连接池参数，防止远程 PostgreSQL 服务器关闭空闲连接
+                    self._pool = AsyncConnectionPool(
+                        db_uri,
+                        kwargs={
+                            "autocommit": True,
+                            "keepalives": 1,           # 启用 keepalive
+                            "keepalives_idle": 30,     # 空闲 30 秒后发送 keepalive
+                            "keepalives_interval": 10, # 每 10 秒发送一次
+                            "keepalives_count": 3      # 最多重试 3 次
+                        },
+                        min_size=2,
+                        max_size=10,
+                        timeout=30                    # 连接超时
+                    )
                     await self._pool.open()
                     self._checkpointer = AsyncPostgresSaver(self._pool)
 
