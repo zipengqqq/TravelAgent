@@ -26,7 +26,8 @@ class GenericSchema(BaseModel, Generic[T]):
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
-    logger.info("应用启动中...")
+    logger.info("🚀应用启动中...")
+    logger.info("✅应用启动完成...")
     yield
     # 关闭时清理
     logger.info("应用关闭中...")
