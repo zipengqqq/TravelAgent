@@ -128,19 +128,21 @@ class AssistantService:
         async def run_workflow():
             # nonlocal关键字，可以读取外部变量workflow_done并且修改它，如果不加这个关键字，那么workflow_node就不会被修改
             nonlocal workflow_done
+            interrupted = False
             try:
                 async for event in self._app.astream(state, config=config):
                     # 这里可以处理节点级别的事件（如果需要）
                     pass
             except GraphInterrupt:
                 # 人机交互中断，节点内部已发送 waiting_for_approval
-                return
+                interrupted = True
             except Exception as e:
                 logger.error(f"工作流执行出错: {e}")
                 await queue.put({"type": "error", "data": {"message": str(e)}})
             finally:
-                await queue.put({"type": "workflow_end"})
-                workflow_done = True
+                if not interrupted:
+                    await queue.put({"type": "workflow_end"})
+                    workflow_done = True
 
         # 启动工作流任务
         workflow_task = asyncio.create_task(run_workflow())
