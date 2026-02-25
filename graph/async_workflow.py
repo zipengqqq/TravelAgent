@@ -11,6 +11,7 @@ from graph.async_function import async_route_by_intent, async_should_end
 from graph.async_nodes import (
     async_router_node,
     async_planner_node,
+    async_human_review_node,
     async_executor_node,
     async_direct_answer_node,
     async_plan_summary_node,
@@ -24,6 +25,7 @@ async_workflow = StateGraph(PlanExecuteState)
 # 添加所有异步节点
 async_workflow.add_node("router", async_router_node)
 async_workflow.add_node("planner", async_planner_node)
+async_workflow.add_node("human_review", async_human_review_node)
 async_workflow.add_node("executor", async_executor_node)
 async_workflow.add_node("plan_summary", async_plan_summary_node)
 async_workflow.add_node("direct_answer", async_direct_answer_node)
@@ -51,7 +53,8 @@ async_workflow.add_edge("direct_answer", "memory_save")
 async_workflow.add_edge("memory_save", END)
 
 # planner 流程
-async_workflow.add_edge("planner", "executor")  # 规划 -> 执行者
+async_workflow.add_edge("planner", "human_review")  # 规划 -> 人机交互
+async_workflow.add_edge("human_review", "executor")  # 人机交互 -> 执行者
 async_workflow.add_edge("executor", "plan_summary")  # 执行者 -> 计划总结
 
 # 总结条件分支

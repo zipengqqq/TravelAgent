@@ -5,6 +5,7 @@ import traceback
 from datetime import datetime
 
 from langchain_openai import ChatOpenAI
+from langgraph.errors import GraphInterrupt
 
 from graph.async_workflow import async_workflow, compiled_async_workflow
 from graph.stream_callback import set_stream_queue
@@ -12,6 +13,7 @@ from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
 from pojo.request.conversation_delete_request import ConversationDeleteRequest
+from pojo.request.approve_request import ApproveRequest
 from service.prompts import name_conversation_prompt
 from utils.db_util import create_session
 from utils.id_util import id_worker
@@ -115,7 +117,8 @@ class AssistantService:
             "route": "",
             "messages": [],
             "user_id": user_id,
-            "memories": []
+            "memories": [],
+            "approved": False
         }
 
         config = {"configurable": {"thread_id": thread_id}}
@@ -128,6 +131,9 @@ class AssistantService:
                 async for event in self._app.astream(state, config=config):
                     # 这里可以处理节点级别的事件（如果需要）
                     pass
+            except GraphInterrupt:
+                # 人机交互中断，节点内部已发送 waiting_for_approval
+                return
             except Exception as e:
                 logger.error(f"工作流执行出错: {e}")
                 await queue.put({"type": "error", "data": {"message": str(e)}})
@@ -174,6 +180,11 @@ class AssistantService:
                 elif event.get("type") == "status": # 处理状态
                     yield {
                         "type": "status",
+                        "data": event.get("data", {})
+                    }
+                elif event.get("type") == "waiting_for_approval":  # 人机交互中断
+                    yield {
+                        "type": "waiting_for_approval",
                         "data": event.get("data", {})
                     }
 
@@ -246,4 +257,67 @@ class AssistantService:
         response = parse_llm_json(raw.content)
         logger.info(f"LLM响应: {response}")
         return response.get('res', '')
+
+    async def approve(self, request: ApproveRequest):
+        """用户审批规划"""
+        await self._ensure_initialized()
+
+        thread_id = request.thread_id
+        config = {"configurable": {"thread_id": thread_id}}
+
+        # 更新状态
+        update_values = {
+            "approved": not request.cancelled  # cancelled=True 则 approved=False
+        }
+
+        # 覆盖计划
+        update_values["plan"] = request.plan
+
+        await self._app.aupdate_state(config, update_values)
+
+        # 继续执行工作流
+        queue = asyncio.Queue()
+        set_stream_queue(queue)
+
+        async def run_workflow():
+            try:
+                async for event in self._app.astream(None, config=config):
+                    pass
+            except GraphInterrupt:
+                return
+            except Exception as e:
+                logger.error(f"工作流执行出错: {e}")
+                await queue.put({"type": "error", "data": {"message": str(e)}})
+            finally:
+                await queue.put({"type": "workflow_end"})
+
+        workflow_task = asyncio.create_task(run_workflow())
+
+        try:
+            while True:
+                if workflow_task.done() and queue.empty():
+                    break
+
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    yield {"type": "heartbeat", "data": {}}
+                    continue
+
+                if event.get("type") == "token":
+                    yield {"type": "token", "node": event.get("node"), "data": event.get("data", {})}
+                elif event.get("type") == "workflow_end":
+                    yield {"type": "workflow_end", "data": {}}
+                elif event.get("type") == "error":
+                    yield {"type": "error", "data": event.get("data", {})}
+                elif event.get("type") == "status":
+                    yield {"type": "status", "data": event.get("data", {})}
+                elif event.get("type") == "waiting_for_approval":
+                    yield {"type": "waiting_for_approval", "data": event.get("data", {})}
+
+        except asyncio.CancelledError:
+            workflow_task.cancel()
+        finally:
+            if not workflow_task.done():
+                workflow_task.cancel()
 

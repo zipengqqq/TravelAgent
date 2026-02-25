@@ -14,6 +14,7 @@ from graph.prompts import (
     search_query_prompt, plan_summary_prompt
 )
 from graph.stream_callback import create_streaming_llm, get_stream_queue
+from langgraph.types import interrupt, Command
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
@@ -146,6 +147,45 @@ async def async_planner_node(state: PlanExecuteState):
     })
 
     return {"plan": steps}
+
+
+async def async_human_review_node(state: PlanExecuteState):
+    """人机交互节点 - 等待用户审核/修改/取消
+
+    使用 interrupt() 实现真正的节点内部中断
+    """
+    plan = state.get("plan", [])
+    queue = get_stream_queue()
+
+    # 发送等待审批消息给前端
+    await queue.put({
+        "type": "waiting_for_approval",
+        "data": {
+            "plan": plan
+        }
+    })
+
+    # 使用 interrupt 实现真正的中断
+    result = interrupt({
+        "type": "human_review",
+        "plan": plan
+    })
+
+    # 处理中断返回的结果
+    approved = result.get("approved") if result else None
+
+    if approved is False:
+        # 用户取消任务，添加取消消息并结束
+        return Command(
+            goto="end", # 直接跳转到结束节点
+            update={
+                "approved": False,
+                "messages": [("assistant", "用户取消了任务")]
+            }
+        )
+    else:
+        # 用户批准了，继续执行
+        return {"approved": True}
 
 
 async def async_executor_node(state: PlanExecuteState):

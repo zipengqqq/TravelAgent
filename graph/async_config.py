@@ -119,6 +119,7 @@ class PlanExecuteState(TypedDict):
     messages: Annotated[List[Tuple], operator.add]  # 对话历史
     user_id: int  # 用户id，当前固定为1
     memories: List[str]  # 长期记忆
+    approved: bool  # 用户是否批准计划
 
 
 # 结构化输出模型

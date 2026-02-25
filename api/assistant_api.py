@@ -8,6 +8,7 @@ from pojo.request.conversation_add_request import ConversationAddRequest
 from pojo.request.conversation_delete_request import ConversationDeleteRequest
 from pojo.request.conversation_list_request import ConversationListRequest
 from pojo.request.conversation_select_request import ConversationSelectRequest
+from pojo.request.approve_request import ApproveRequest
 
 from service.assistant_service import AssistantService
 from utils.api_response_uti import build_response
@@ -66,6 +67,31 @@ async def select_conversation(request: ConversationSelectRequest):
 async def delete_conversation(request: ConversationDeleteRequest):
     """删除对话，返回删除的记录数"""
     return build_response(await assistant_service.delete_conversation(request))
+
+
+async def approve_event_generator(request: ApproveRequest, http_request: Request):
+    """审批 SSE 事件生成器"""
+    try:
+        async for chunk in assistant_service.approve(request):
+            if await http_request.is_disconnected():
+                break
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'data': {'message': str(e)}}, ensure_ascii=False)}\n\n"
+
+
+@router.post("/approve", summary="审批规划")
+async def approve(request: ApproveRequest, http_request: Request):
+    """用户审批规划（批准/修改/取消）"""
+    return StreamingResponse(
+        approve_event_generator(request, http_request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 
