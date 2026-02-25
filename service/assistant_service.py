@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import os
+import traceback
 from datetime import datetime
 
 from langchain_openai import ChatOpenAI
@@ -76,6 +77,7 @@ class AssistantService:
                     self._app = async_workflow.compile(checkpointer=self._checkpointer)
                     logger.info("AssistantService 初始化完成（启用 Postgres checkpointer）")
                 except Exception as e:
+                    traceback.print_exc()
                     logger.warning(f"AssistantService 初始化 checkpointer 失败，将使用无持久化工作流: {e}")
                     self._app = compiled_async_workflow
             else:

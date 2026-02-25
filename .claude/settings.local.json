@@ -24,7 +24,9 @@
       "Bash(gh issue view:*)",
       "Bash(python3 -c:*)",
       "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/python:*)",
-      "Bash(/Users/penn/miniforge3/envs/travel-agent-python311/bin/python:*)"
+      "Bash(/Users/penn/miniforge3/envs/travel-agent-python311/bin/python:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)"
     ]
   }
 }
