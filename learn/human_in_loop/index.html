@@ -461,16 +461,15 @@
         // 提交修改
         async function submitModification() {
             closeModifyModal();
-            await approve(false);
 
-            // 更新计划
+            // 只发送一次请求，带上 modified_plan
             try {
                 const response = await fetch(API_BASE + '/api/approve', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         session_id: currentSessionId,
-                        approved: false,
+                        approved: false,  // 标记为修改，需要重新审核
                         modified_plan: currentPlan
                     })
                 });

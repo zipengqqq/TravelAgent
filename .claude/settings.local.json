@@ -20,7 +20,11 @@
       "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/pip show langgraph)",
       "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/pip show:*)",
       "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/pip index versions:*)",
-      "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/pip install:*)"
+      "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/pip install:*)",
+      "Bash(gh issue view:*)",
+      "Bash(python3 -c:*)",
+      "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/python:*)",
+      "Bash(/Users/penn/miniforge3/envs/travel-agent-python311/bin/python:*)"
     ]
   }
 }

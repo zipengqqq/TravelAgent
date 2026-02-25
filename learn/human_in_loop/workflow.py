@@ -5,11 +5,11 @@ LangGraph 人机交互示例
 """
 
 from typing import TypedDict, Literal
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import interrupt
+
 from langchain_core.messages import HumanMessage, AIMessage
-from pydantic import BaseModel
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import StateGraph, END
+from langgraph.types import interrupt, Command
 
 
 # ============ 状态定义 ============
@@ -22,8 +22,8 @@ class AgentState(TypedDict):
     approved: bool | None
 
 
-# ============ 节点函数 ============
-def planner_node(state: AgentState):
+# ============ 异步节点函数 ============
+async def planner_node(state: AgentState):
     """规划节点 - 生成执行计划"""
     messages = state["messages"]
     last_message = messages[-1] if messages else None
@@ -56,7 +56,7 @@ def planner_node(state: AgentState):
     return {}
 
 
-def human_review_node(state: AgentState):
+async def human_review_node(state: AgentState):
     """人机交互节点 - 等待用户审核/修改
 
     使用 interrupt() 实现真正的节点内部中断
@@ -70,8 +70,8 @@ def human_review_node(state: AgentState):
 
     plan_summary += "\n请点击「批准」继续执行，或点击「修改」调整计划。"
 
-    # ⭐ 使用 interrupt 实现真正的中断
-    # 工作流会在这里暂停，直到外部调用 update_state 恢复
+    # 使用 interrupt 实现真正的中断
+    # interrupt入参会在抛出异常时，显示，result是用户批准后返回的数据
     result = interrupt({
         "type": "human_review",
         "plan": plan,
@@ -79,48 +79,44 @@ def human_review_node(state: AgentState):
     })
 
     # 处理中断返回的结果
+    approved = result.get("approved") if result else None
+    user_input = result.get("user_input") if result else None
+
+    if approved is False:
+        # 用户修改了计划，返回审核节点重新显示
+        return Command(
+            goto="human_review",
+            update={
+                "messages": state["messages"] + [AIMessage(content=plan_summary)],
+                "approved": None,  # 重置为 None，重新进入审核
+                "user_input": "modified"
+            }
+        )
+    else:
+        # 用户批准了，去执行器
+        return {
+            "messages": state["messages"] + [AIMessage(content=plan_summary)],
+            "approved": approved,
+            "user_input": user_input,
+        }
+
+
+async def executor_node(state: AgentState):
+    """执行节点 - 一次性执行所有计划步骤"""
+    plan = state.get("plan", [])
+
+    # 一次性执行所有步骤
+    for item in plan:
+        item["status"] = "completed"
+        item["result"] = f"已完成: {item['action']}"
+
     return {
-        "messages": state["messages"] + [AIMessage(content=plan_summary)],
-        "approved": result.get("approved"),
-        "user_input": result.get("user_input"),
+        "plan": plan,
+        "current_step": len(plan)
     }
 
 
-def executor_node(state: AgentState):
-    """执行节点 - 执行计划中的步骤
-
-    使用 interrupt() 在每个步骤执行后等待用户审核
-    """
-    plan = state.get("plan", [])
-    current_step = state.get("current_step", 0)
-
-    if current_step < len(plan):
-        # 执行当前步骤
-        plan[current_step]["status"] = "completed"
-        plan[current_step]["result"] = f"已完成: {plan[current_step]['action']}"
-
-        next_step = current_step + 1
-
-        # ⭐ 使用 interrupt 实现真正的中断
-        # 在每个步骤执行后暂停，等待用户审核
-        result = interrupt({
-            "type": "step_approval",
-            "current_step": current_step,
-            "step_info": plan[current_step],
-            "total_steps": len(plan)
-        })
-
-        return {
-            "plan": plan,
-            "current_step": next_step,
-            "approved": result.get("approved") if result else True
-        }
-
-    # return {} 表示不更新任何状态
-    return {}
-
-
-def final_response_node(state: AgentState):
+async def final_response_node(state: AgentState):
     """最终响应节点 - 生成最终回答"""
     plan = state.get("plan", [])
 
@@ -137,25 +133,19 @@ def final_response_node(state: AgentState):
 
 
 def should_continue(state: AgentState) -> Literal["executor", "human_review", "end"]:
-    """路由函数 - 决定下一步
-
-    注意：使用 interrupt 后，中断返回的值会更新 approved
-    外部调用 update_state 后，工作流会继续执行到这里
-    """
+    """路由函数 - 决定下一步"""
     approved = state.get("approved")
+
+    # 首次进入（approved 为 None），先去 human_review 让用户审核
+    if approved is None:
+        return "human_review"
 
     # 用户未批准，返回审核节点
     if approved is False:
         return "human_review"
 
-    # 用户已批准（或首次进入），检查是否还有步骤未完成
-    plan = state.get("plan", [])
-    current_step = state.get("current_step", 0)
-
-    if current_step < len(plan):
-        return "executor"
-    else:
-        return "end"
+    # 用户已批准，去 executor 执行所有步骤
+    return "executor"
 
 
 def should_skip_planner(state: AgentState) -> Literal["continue_execution", "planner"]:
@@ -205,15 +195,8 @@ def create_human_loop_graph():
         }
     )
 
-    # 从执行器出来 - 循环执行或结束
-    workflow.add_conditional_edges(
-        "executor",
-        should_stop,
-        {
-            "executor": "executor",
-            "end": "final_response"
-        }
-    )
+    # 执行器执行完后直接到最终响应节点
+    workflow.add_edge("executor", "final_response")
 
     # 人机审核节点后继续执行器（用户批准后）
     workflow.add_edge("human_review", "executor")
@@ -229,15 +212,24 @@ graph = create_human_loop_graph()
 
 # ============ 测试运行 ============
 if __name__ == "__main__":
-    # 测试工作流
-    initial_state = {
-        "messages": [HumanMessage(content="我想去日本旅行一周")],
-        "plan": None,
-        "current_step": 0,
-        "user_input": None,
-        "approved": None
-    }
+    import asyncio
 
-    print("=== 初始状态 ===")
-    result = graph.invoke(initial_state)
-    print(result)
+    async def test():
+        initial_state = {
+            "messages": [HumanMessage(content="我想去日本旅行一周")],
+            "plan": None,
+            "current_step": 0,
+            "user_input": None,
+            "approved": None
+        }
+
+        config = {"configurable": {"thread_id": "test-thread"}}
+
+        print("=== 初始状态 ===")
+        try:
+            async for event in graph.astream(initial_state, config, stream_mode="values"):
+                print("Event keys:", event.keys() if hasattr(event, 'keys') else event)
+        except Exception as e:
+            print("Error:", type(e).__name__, str(e))
+
+    asyncio.run(test())
