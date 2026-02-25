@@ -120,6 +120,7 @@ class PlanExecuteState(TypedDict):
     user_id: int  # 用户id，当前固定为1
     memories: List[str]  # 长期记忆
     approved: bool  # 用户是否批准计划
+    cancelled: bool  # 用户是否取消任务
 
 
 # 结构化输出模型

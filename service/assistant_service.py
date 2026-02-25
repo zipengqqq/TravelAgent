@@ -118,7 +118,8 @@ class AssistantService:
             "messages": [],
             "user_id": user_id,
             "memories": [],
-            "approved": False
+            "approved": False,
+            "cancelled": False
         }
 
         config = {"configurable": {"thread_id": thread_id}}
@@ -267,11 +268,13 @@ class AssistantService:
 
         # 更新状态
         update_values = {
-            "approved": not request.cancelled  # cancelled=True 则 approved=False
+            "approved": not request.cancelled,  # cancelled=True 则 approved=False
+            "cancelled": request.cancelled
         }
 
-        # 覆盖计划
-        update_values["plan"] = request.plan
+        # 覆盖计划（只有非空时才覆盖）
+        if request.plan:
+            update_values["plan"] = request.plan
 
         await self._app.aupdate_state(config, update_values)
 

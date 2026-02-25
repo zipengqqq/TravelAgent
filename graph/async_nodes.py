@@ -155,43 +155,23 @@ async def async_human_review_node(state: PlanExecuteState):
     使用 interrupt() 实现真正的节点内部中断
     """
     approved = state.get("approved", False)
+    cancelled = state.get("cancelled", False)
     plan = state.get("plan", [])
 
-    # 如果已经批准了（恢复执行时），直接返回，跳过 interrupt
+    # 恢复执行时，跳过 interrupt
     if approved:
         return {}
 
+    # 用户取消，直接结束
+    if cancelled:
+        return Command(goto="end")
+
     queue = get_stream_queue()
+    await queue.put({"type": "waiting_for_approval", "data": {"plan": plan}})
 
-    # 发送等待审批消息给前端
-    await queue.put({
-        "type": "waiting_for_approval",
-        "data": {
-            "plan": plan
-        }
-    })
-
-    # 使用 interrupt 实现真正的中断
-    result = interrupt({
-        "type": "human_review",
-        "plan": plan
-    })
-
-    # 处理中断返回的结果
-    approved = result.get("approved") if result else None
-
-    if approved is False:
-        # 用户取消任务，添加取消消息并结束
-        return Command(
-            goto="end", # 直接跳转到结束节点
-            update={
-                "approved": False,
-                "messages": [("assistant", "用户取消了任务")]
-            }
-        )
-    else:
-        # 用户批准了，继续执行
-        return {"approved": True}
+    # interrupt 等待用户操作
+    interrupt({"type": "human_review", "plan": plan})
+    return {}
 
 
 async def async_executor_node(state: PlanExecuteState):
