@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.errors import GraphInterrupt
+import concurrent.futures
 
 import sys
 import os
@@ -70,6 +71,8 @@ async def chat(request: ChatRequest):
     """开始新的对话
 
     使用 interrupt 后，工作流会在中断处抛出 GraphInterrupt 异常
+
+    注意：由于 LangGraph 1.0.x 的 astream bug，使用同步版本通过线程池执行
     """
     session_id = request.session_id or str(uuid.uuid4())
 
@@ -85,14 +88,18 @@ async def chat(request: ChatRequest):
     # 使用 config 设置 thread_id 用于状态恢复
     config = {"configurable": {"thread_id": session_id}}
 
-    result = None
-    try:
-        # 执行工作流，interrupt 会抛出异常中断执行
-        async for event in graph.astream(initial_state, config, stream_mode="values"):
-            result = event
-    except GraphInterrupt:
-        # ⭐ 捕获 interrupt 中断，获取中断前的状态
-        pass
+    # 使用线程池执行同步版本的 stream（避免 astream 的 bug）
+    def run_graph():
+        result = None
+        try:
+            for event in graph.stream(initial_state, config, stream_mode="values"):
+                result = event
+        except GraphInterrupt:
+            pass
+        return result
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, run_graph)
 
     # 返回当前状态和 session_id
     return {
@@ -108,41 +115,51 @@ async def approve(request: ApproveRequest):
     """用户审核/批准
 
     使用 interrupt 后，update_state 会将值传递给 interrupt 并继续执行
+
+    注意：由于 LangGraph 1.0.x 的 astream bug，使用同步版本通过线程池执行
     """
     session_id = request.session_id
     config = {"configurable": {"thread_id": session_id}}
 
-    # 获取当前状态
-    current_state = await graph.aget_state(config)
+    # 使用线程池执行同步操作（避免 astream/aget_state/aupdate_state 的 bug）
+    def run_approve():
+        # 获取当前状态
+        current_state = graph.get_state(config)
 
-    if current_state is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        if current_state is None:
+            raise Exception("会话不存在")
 
-    # 转换为字典
-    state_dict = dict(current_state.values) if hasattr(current_state, 'values') else current_state
+        # 转换为字典
+        state_dict = dict(current_state.values) if hasattr(current_state, 'values') else current_state
 
-    # 使用 update_state 更新状态并继续执行
-    # interrupt 会接收这个返回值并继续执行
-    update_values = {
-        "approved": request.approved,
-        "user_input": "approved" if request.approved else "needs_modification"
-    }
+        # 使用 update_state 更新状态并继续执行
+        update_values = {
+            "approved": request.approved,
+            "user_input": "approved" if request.approved else "needs_modification"
+        }
 
-    # 如果用户修改了计划，更新计划并重置步骤
-    if request.modified_plan:
-        update_values["plan"] = request.modified_plan
-        update_values["current_step"] = 0
+        # 如果用户修改了计划，更新计划并重置步骤
+        if request.modified_plan:
+            update_values["plan"] = request.modified_plan
+            update_values["current_step"] = 0
 
-    await graph.aupdate_state(config, update_values)
+        graph.update_state(config, update_values)
 
-    # 继续执行工作流
-    result = None
-    try:
-        async for event in graph.astream(None, config, stream_mode="values"):
-            result = event
-    except GraphInterrupt:
-        # 捕获下一个中断（可能是步骤审批）
-        pass
+        # 继续执行工作流
+        result = None
+        try:
+            for event in graph.stream(None, config, stream_mode="values"):
+                result = event
+        except GraphInterrupt:
+            pass
+
+        return result
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, run_approve)
+
+    if isinstance(result, Exception):
+        raise HTTPException(status_code=404, detail=str(result))
 
     # 检查是否完成（所有步骤都已执行）
     is_complete = result.get("current_step", 0) >= len(result.get("plan", []))
@@ -158,18 +175,26 @@ async def approve(request: ApproveRequest):
 
 @app.post("/api/state")
 async def get_state(request: GetStateRequest):
-    """获取当前状态"""
+    """获取当前状态
+
+    注意：由于 LangGraph 1.0.x 的 aget_state bug，使用同步版本通过线程池执行
+    """
     session_id = request.session_id
     config = {"configurable": {"thread_id": session_id}}
 
-    # 获取当前状态
-    current_state = await graph.aget_state(config)
+    # 使用线程池执行同步操作
+    def run_get_state():
+        current_state = graph.get_state(config)
+        if current_state is None:
+            raise Exception("会话不存在")
+        return dict(current_state.values) if hasattr(current_state, 'values') else current_state
 
-    if current_state is None:
-        raise HTTPException(status_code=404, detail="会话不存在")
+    loop = asyncio.get_event_loop()
+    try:
+        state_dict = await loop.run_in_executor(None, run_get_state)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
-    # 转换为字典
-    state_dict = dict(current_state.values) if hasattr(current_state, 'values') else current_state
     is_complete = state_dict.get("current_step", 0) >= len(state_dict.get("plan", []))
 
     return {
