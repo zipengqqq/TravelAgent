@@ -170,6 +170,10 @@ class ChatApp {
                         console.error('Stream error:', chunk.data);
                     } else if (chunk.type === 'heartbeat') {
                         // 心跳，保持连接
+                    } else if (chunk.type === 'waiting_for_approval') {
+                        // 人机交互中断，显示规划审批卡片
+                        this.hideTypingIndicator();
+                        this.showApprovalPanel(chunk.data);
                     }
                 },
                 () => {
@@ -615,6 +619,147 @@ class ChatApp {
 
         this.currentStatusPanel = null;
         this.currentStatusList = [];
+    }
+
+    /**
+     * 显示规划审批卡片
+     */
+    showApprovalPanel(data) {
+        const plan = data?.plan || [];
+        const conversation = this.getActiveConversation();
+        const threadId = conversation?.threadId;
+
+        // 保存原始计划，供批准时使用
+        const originalPlan = [...plan];
+
+        // 创建审批面板
+        const approvalDiv = document.createElement('div');
+        approvalDiv.className = 'approval-panel';
+        approvalDiv.dataset.originalPlan = JSON.stringify(originalPlan);
+
+        let planHtml = '';
+        plan.forEach((item, index) => {
+            planHtml += `
+                <div class="approval-plan-item">
+                    <span class="plan-number">${index + 1}</span>
+                    <input type="text" class="plan-input" value="${this.escapeHtml(item)}" data-index="${index}">
+                </div>
+            `;
+        });
+
+        approvalDiv.innerHTML = `
+            <div class="approval-header">
+                <span class="approval-title">请确认旅行规划</span>
+            </div>
+            <div class="approval-plan-list">
+                ${planHtml}
+            </div>
+            <div class="approval-actions">
+                <button class="btn-approve">批准执行</button>
+                <button class="btn-modify">修改计划</button>
+                <button class="btn-cancel">取消任务</button>
+            </div>
+        `;
+
+        this.messagesContainer.appendChild(approvalDiv);
+        this.scrollToBottom();
+
+        // 绑定事件
+        const btnApprove = approvalDiv.querySelector('.btn-approve');
+        const btnModify = approvalDiv.querySelector('.btn-modify');
+        const btnCancel = approvalDiv.querySelector('.btn-cancel');
+
+        // 批准
+        btnApprove.addEventListener('click', () => {
+            const origPlan = JSON.parse(approvalDiv.dataset.originalPlan || '[]');
+            this.submitApproval(threadId, true, origPlan, false, approvalDiv);
+        });
+
+        // 修改
+        btnModify.addEventListener('click', () => {
+            const inputs = approvalDiv.querySelectorAll('.plan-input');
+            const modifiedPlan = Array.from(inputs).map(input => input.value.trim()).filter(p => p);
+            this.submitApproval(threadId, true, modifiedPlan, false, approvalDiv);
+        });
+
+        // 取消
+        btnCancel.addEventListener('click', () => {
+            this.submitApproval(threadId, false, [], true, approvalDiv);
+        });
+    }
+
+    /**
+     * 提交审批
+     */
+    async submitApproval(threadId, approved, plan, cancelled, panel) {
+        if (!threadId) return;
+
+        // 禁用按钮
+        const buttons = panel.querySelectorAll('button');
+        buttons.forEach(btn => btn.disabled = true);
+
+        this.isTyping = true;
+
+        // 移除审批面板
+        panel.remove();
+
+        // 添加系统消息
+        const statusMsg = cancelled ? '用户取消了任务' : '用户已确认规划';
+        this.addMessage(statusMsg, 'assistant');
+
+        // 显示打字 indicator
+        this.showTypingIndicator();
+
+        const assistantMessageDiv = this.addMessage('', 'assistant');
+        const assistantContentEl = assistantMessageDiv.querySelector('.message-content');
+        let assistantText = '';
+        let receivedFirstChunk = false;
+
+        try {
+            await api.approveStream(
+                threadId,
+                approved,
+                plan,
+                cancelled,
+                (chunk) => {
+                    if (chunk.type === 'token') {
+                        if (!receivedFirstChunk) {
+                            this.hideTypingIndicator();
+                            receivedFirstChunk = true;
+                        }
+                        const token = chunk.data?.content || '';
+                        assistantText += token;
+                        if (assistantContentEl) {
+                            assistantContentEl.innerHTML = this.formatMessage(assistantText);
+                        }
+                        this.scrollToBottom();
+                    } else if (chunk.type === 'status') {
+                        this.updateStatusPanel(chunk.data?.status || '');
+                    } else if (chunk.type === 'workflow_end') {
+                        this.finishStatusPanel();
+                    } else if (chunk.type === 'error') {
+                        console.error('Stream error:', chunk.data);
+                    }
+                },
+                () => {
+                    this.isTyping = false;
+                    this.handleInput();
+                },
+                (error) => {
+                    this.hideTypingIndicator();
+                    if (assistantContentEl) {
+                        assistantContentEl.innerHTML = `<em>${this.escapeHtml(error.message || '审批提交失败')}</em>`;
+                    }
+                    this.isTyping = false;
+                    this.handleInput();
+                }
+            );
+        } catch (error) {
+            this.hideTypingIndicator();
+            this.addErrorMessage(error.message || '审批提交失败');
+            this.isTyping = false;
+            this.handleInput();
+        }
     }
 }
 

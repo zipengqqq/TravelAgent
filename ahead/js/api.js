@@ -95,6 +95,74 @@ class TravelAgentAPI {
     }
 
     /**
+     * 审批规划（批准/修改/取消）
+     * @param {string} threadId - 会话 ID
+     * @param {boolean} approved - 是否批准
+     * @param {Array} plan - 修改后的规划（可选）
+     * @param {boolean} cancelled - 是否取消
+     * @param {Function} onChunk - 接收数据块的回调
+     * @param {Function} onComplete - 完成回调
+     * @param {Function} onError - 错误回调
+     */
+    async approveStream(threadId, approved, plan, cancelled, onChunk, onComplete, onError) {
+        try {
+            const url = `${this.baseURL}/approve`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    thread_id: threadId,
+                    approved: approved,
+                    plan: plan,
+                    cancelled: cancelled
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`审批请求失败(${response.status}): ${errorText}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+                        if (data) {
+                            try {
+                                const chunk = JSON.parse(data);
+                                onChunk(chunk);
+
+                                if (chunk.type === 'workflow_end' || chunk.type === 'end') {
+                                    onComplete();
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('解析 SSE 数据失败:', e, data);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('API 错误:', error);
+            onError(error);
+        }
+    }
+
+    /**
      * 流式聊天
      * @param {string} message - 用户消息
      * @param {Function} onChunk - 接收数据块的回调函数 (chunk: {type: string, data: object})

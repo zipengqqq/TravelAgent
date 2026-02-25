@@ -154,7 +154,13 @@ async def async_human_review_node(state: PlanExecuteState):
 
     使用 interrupt() 实现真正的节点内部中断
     """
+    approved = state.get("approved", False)
     plan = state.get("plan", [])
+
+    # 如果已经批准了（恢复执行时），直接返回，跳过 interrupt
+    if approved:
+        return {}
+
     queue = get_stream_queue()
 
     # 发送等待审批消息给前端

@@ -947,3 +947,120 @@ body.sidebar-open .sidebar-backdrop {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
+
+/* ========== 审批面板 ========== */
+.approval-panel {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 20px;
+    margin: 16px 0;
+    max-width: 600px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.approval-header {
+    margin-bottom: 16px;
+}
+
+.approval-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.approval-plan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.approval-plan-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.plan-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.plan-input {
+    flex: 1;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: border-color 0.2s;
+}
+
+.plan-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.approval-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.approval-actions button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.approval-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-approve {
+    background: var(--accent);
+    color: white;
+}
+
+.btn-approve:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.btn-modify {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.btn-modify:hover:not(:disabled) {
+    background: var(--border-color);
+}
+
+.btn-cancel {
+    background: #ff3b30;
+    color: white;
+}
+
+.btn-cancel:hover:not(:disabled) {
+    background: #d63027;
+}
