@@ -734,10 +734,11 @@ class ChatApp {
             });
         };
 
-        // 批准
+        // 批准（使用当前UI中的计划，反映用户的删除/修改）
         btnApprove.addEventListener('click', () => {
-            const origPlan = JSON.parse(approvalDiv.dataset.originalPlan || '[]');
-            this.submitApproval(threadId, true, origPlan, false, approvalDiv);
+            const inputs = approvalDiv.querySelectorAll('.plan-input');
+            const currentPlan = Array.from(inputs).map(input => input.value.trim()).filter(p => p);
+            this.submitApproval(threadId, true, currentPlan, false, approvalDiv);
         });
 
         // 修改
