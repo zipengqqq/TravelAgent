@@ -532,7 +532,7 @@ class ChatApp {
     /**
      * 创建状态面板
      */
-    createStatusPanel() {
+    createStatusPanel(insertAfterElement = null) {
         this.currentStatusList = [];
 
         const statusDiv = document.createElement('div');
@@ -567,13 +567,18 @@ class ChatApp {
         statusDiv.appendChild(header);
         statusDiv.appendChild(content);
 
-        // 插入到用户消息之后
-        const messages = this.messagesContainer.querySelectorAll('.message');
-        const lastUserMessage = Array.from(messages).filter(m => m.classList.contains('user')).pop();
-        if (lastUserMessage) {
-            lastUserMessage.after(statusDiv);
+        // 如果指定了插入位置，则插入到该元素之后
+        if (insertAfterElement) {
+            insertAfterElement.after(statusDiv);
         } else {
-            this.messagesContainer.appendChild(statusDiv);
+            // 插入到用户消息之后
+            const messages = this.messagesContainer.querySelectorAll('.message');
+            const lastUserMessage = Array.from(messages).filter(m => m.classList.contains('user')).pop();
+            if (lastUserMessage) {
+                lastUserMessage.after(statusDiv);
+            } else {
+                this.messagesContainer.appendChild(statusDiv);
+            }
         }
 
         this.currentStatusPanel = { header, content, list: content.querySelector('.status-list') };
@@ -719,6 +724,10 @@ class ChatApp {
 
         // 显示打字 indicator
         this.showTypingIndicator();
+
+        // 重新创建状态面板，以便接收后端的 status 消息
+        // 传入审批卡片作为插入位置参考，使其显示在卡片下方
+        this.createStatusPanel(panel);
 
         let assistantMessageDiv = null;
         let assistantContentEl = null;
