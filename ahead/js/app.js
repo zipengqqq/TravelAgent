@@ -655,7 +655,7 @@ class ChatApp {
             planHtml += `
                 <div class="approval-plan-item">
                     <span class="plan-number">${index + 1}</span>
-                    <textarea class="plan-input" data-index="${index}" readonly>${this.escapeHtml(item)}</textarea>
+                    <textarea class="plan-input" data-index="${index}">${this.escapeHtml(item)}</textarea>
                 </div>
             `;
         });

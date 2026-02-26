@@ -158,6 +158,7 @@ async def async_human_review_node(state: PlanExecuteState):
 
     # 恢复执行时，跳过 interrupt
     if approved:
+        logger.info(f"用户已确认计划：{plan}")
         return {}
 
     # 用户取消，直接结束
