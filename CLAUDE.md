@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-TravelAgent 是一个基于 Python 的 AI 旅行规划智能体，使用 LangGraph 和 LLM 技术构建。项目展示了先进的 AI 智能体模式，包括规划-执行、多智能体系统、记忆管理、MCP 集成以及 Token 级别的流式输出。
+TravelAgent 是一个基于 Python 的 AI 旅行规划智能体，使用 LangGraph 和 LLM 技术构建。项目展示了先进的 AI 智能体模式，包括规划-执行、多智能体系统、记忆管理、MCP 集成、人机交互以及 Token 级别的流式输出。
 
 ## 环境设置
 
@@ -51,6 +51,10 @@ python 05_long_memory.py  # 长期记忆
 # 流式输出示例
 cd learn/stream_nodes
 python main.py
+
+# 人机交互示例
+cd learn/human_in_loop
+python server.py
 ```
 
 ## 架构设计
@@ -85,10 +89,11 @@ python main.py
 
 **异步版本（生产环境使用）：**
 
-**graph/async_workflow.py** - 异步 LangGraph 工作流定义，包含 7 个节点：
+**graph/async_workflow.py** - 异步 LangGraph 工作流定义，包含 8 个节点：
 - `memory_retrieve`: 长期记忆检索
 - `router`: 意图分类
 - `planner`: 生成规划
+- `human_review`: 人机交互节点（等待用户确认规划）
 - `executor`: 执行搜索
 - `plan_summary`: 计划总结（反思评估）
 - `direct_answer`: 直接回答
@@ -167,6 +172,7 @@ python main.py
 | 接口 | 方法 | 说明 |
 |------|------|------|
 | `/api/v1/chat` | POST | SSE 流式聊天接口 |
+| `/api/v1/approve` | POST | 审批规划（批准/修改/取消） |
 | `/api/v1/conversation/add` | POST | 新增对话 |
 | `/api/v1/conversation/list` | POST | 查询对话列表 |
 | `/api/v1/conversation/select` | POST | 查看对话内容 |
@@ -174,6 +180,7 @@ python main.py
 
 **pojo/request/** - 请求参数定义：
 - `ChatRequest`: 聊天请求（question, thread_id, user_id）
+- `ApproveRequest`: 审批请求（approved, plan, cancelled）
 - `ConversationAddRequest`: 新增对话请求
 - `ConversationListRequest`: 对话列表请求
 - `ConversationSelectRequest`: 查看对话请求
@@ -186,6 +193,7 @@ python main.py
 
 **service/assistant_service.py** - 业务层：
 - `chat()`: 流式聊天实现，使用队列 + 后台任务
+- `approve()`: 处理用户审批（批准/修改/取消）
 - `add_conversation()`: 新增对话
 - `list_conversations()`: 查询对话列表
 - `select_conversation()`: 查看对话内容
@@ -214,6 +222,10 @@ learn/
 ├── stream_nodes/         # Token 级别流式输出示例
 │   ├── main.py           # SSE 流式服务
 │   └── workflow.py       # 节点级流式工作流
+├── human_in_loop/        # 人机交互示例
+│   ├── workflow.py       # 人机交互工作流定义
+│   ├── server.py         # FastAPI 服务
+│   └── index.html        # 演示前端页面
 ├── persistence/          # 持久化示例
 │   ├── 01_load_to_db.py  # SQLite 持久化
 │   ├── 02_interupt.py    # 处理中断
@@ -319,6 +331,47 @@ logs/                     # 应用日志
 - 集成小红书内容搜索功能
 - 使用 `uvx --from xiaohongshu-automation xhs-mcp` 调用
 
+## 人机交互（Human-in-the-Loop）
+
+项目实现了基于 LangGraph `interrupt()` 的人机交互功能，允许用户在关键节点介入决策。
+
+### 核心实现
+
+**工作流节点 (`graph/async_nodes.py`):**
+- `async_human_review_node`: 人机交互节点，使用 `interrupt()` 实现真正的节点内部中断
+- 支持三种操作：批准执行、修改计划、取消任务
+- 中断时会向前端发送 `waiting_for_approval` 类型的消息
+
+**前端交互 (`ahead/js/app.js`):**
+- 监听 `waiting_for_approval` 事件
+- 显示审批弹窗，包含计划详情
+- 支持「批准执行」「修改计划」「取消任务」三个按钮
+
+**API 接口:**
+- `POST /api/v1/approve`: 审批规划
+  - `approved`: 是否批准
+  - `plan`: 修改后的计划（可选）
+  - `cancelled`: 是否取消
+
+### 人机交互工作流
+
+```
+用户输入 → 记忆检索 → 路由器 → 规划器 → [人机交互: 等待用户确认]
+                                                      ↓
+                                              用户批准/修改/取消
+                                                      ↓
+执行器 → 计划总结 → 记忆保存 → 结束
+```
+
+### 独立示例
+
+`learn/human_in_loop/` 目录包含完整的人机交互演示：
+- `workflow.py`: 基础人机交互工作流（可直接运行测试）
+- `server.py`: FastAPI 服务（带前端页面）
+- `index.html`: 演示用前端页面
+
+详细实现见 `docs/mcp_react_human_integration.md`
+
 ## 环境变量
 
 `.env` 中必需：
@@ -391,6 +444,8 @@ pytest tests/test_long_memory_integration.py
 
 - `long_memory_implementation.md`: 长期记忆实现详解（11步实施计划）
 - `conversation_interface.md`: 对话接口设计说明
+- `mcp_react_human_integration.md`: MCP、ReAct 与人机交互集成方案
+- `executor_react_migration.md`: 执行器 ReAct 化改造方案
 
 ## 主应用入口
 
