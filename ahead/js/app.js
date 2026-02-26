@@ -700,11 +700,16 @@ class ChatApp {
 
         this.isTyping = true;
 
-        // 移除审批面板
-        panel.remove();
+        // 不移除审批面板，而是更新状态
+        const statusMsg = cancelled ? '用户取消了任务' : '用户已确认规划';
+
+        // 找到按钮区域并替换为状态显示
+        const buttonArea = panel.querySelector('.approval-actions');
+        if (buttonArea) {
+            buttonArea.innerHTML = `<div class="approval-status">✓ ${statusMsg}</div>`;
+        }
 
         // 添加系统消息
-        const statusMsg = cancelled ? '用户取消了任务' : '用户已确认规划';
         this.addMessage(statusMsg, 'assistant');
 
         // 显示打字 indicator

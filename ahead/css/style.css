@@ -1064,3 +1064,16 @@ body.sidebar-open .sidebar-backdrop {
 .btn-cancel:hover:not(:disabled) {
     background: #d63027;
 }
+
+/* 审批确认状态 */
+.approval-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    background: #34c759;
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
