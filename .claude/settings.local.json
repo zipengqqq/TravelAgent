@@ -26,7 +26,11 @@
       "Bash(/Users/penn/miniforge3/envs/travel-agent/bin/python:*)",
       "Bash(/Users/penn/miniforge3/envs/travel-agent-python311/bin/python:*)",
       "Bash(lsof:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "mcp__MiniMax__web_search",
+      "Bash(pip show:*)",
+      "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip show:*)",
+      "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip install:*)"
     ]
   }
 }
