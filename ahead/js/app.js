@@ -653,9 +653,10 @@ class ChatApp {
         let planHtml = '';
         plan.forEach((item, index) => {
             planHtml += `
-                <div class="approval-plan-item">
+                <div class="approval-plan-item" data-index="${index}">
                     <span class="plan-number">${index + 1}</span>
                     <textarea class="plan-input" data-index="${index}">${this.escapeHtml(item)}</textarea>
+                    <button class="btn-delete-item" title="删除此步骤">✕</button>
                 </div>
             `;
         });
@@ -666,6 +667,9 @@ class ChatApp {
             </div>
             <div class="approval-plan-list">
                 ${planHtml}
+            </div>
+            <div class="approval-add-section">
+                <button class="btn-add-item">+ 添加步骤</button>
             </div>
             <div class="approval-actions">
                 <button class="btn-approve">批准执行</button>
@@ -688,6 +692,47 @@ class ChatApp {
         const btnApprove = approvalDiv.querySelector('.btn-approve');
         const btnModify = approvalDiv.querySelector('.btn-modify');
         const btnCancel = approvalDiv.querySelector('.btn-cancel');
+        const btnAddItem = approvalDiv.querySelector('.btn-add-item');
+
+        // 删除单个步骤
+        approvalDiv.querySelectorAll('.btn-delete-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const item = e.target.closest('.approval-plan-item');
+                item.remove();
+                this.updatePlanNumbers(approvalDiv);
+            });
+        });
+
+        // 添加新步骤
+        btnAddItem.addEventListener('click', () => {
+            const planList = approvalDiv.querySelector('.approval-plan-list');
+            const newIndex = planList.children.length;
+            const newItem = document.createElement('div');
+            newItem.className = 'approval-plan-item';
+            newItem.dataset.index = newIndex;
+            newItem.innerHTML = `
+                <span class="plan-number">${newIndex + 1}</span>
+                <textarea class="plan-input" data-index="${newIndex}" placeholder="输入新步骤..."></textarea>
+                <button class="btn-delete-item" title="删除此步骤">✕</button>
+            `;
+            planList.appendChild(newItem);
+            newItem.querySelector('textarea').focus();
+            // 绑定删除事件
+            newItem.querySelector('.btn-delete-item').addEventListener('click', (e) => {
+                const item = e.target.closest('.approval-plan-item');
+                item.remove();
+                this.updatePlanNumbers(approvalDiv);
+            });
+        });
+
+        // 更新步骤序号
+        this.updatePlanNumbers = function(panel) {
+            const items = panel.querySelectorAll('.approval-plan-item');
+            items.forEach((item, idx) => {
+                item.querySelector('.plan-number').textContent = idx + 1;
+                item.querySelector('.plan-input').dataset.index = idx;
+            });
+        };
 
         // 批准
         btnApprove.addEventListener('click', () => {

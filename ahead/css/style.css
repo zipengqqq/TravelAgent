@@ -1020,6 +1020,46 @@ body.sidebar-open .sidebar-backdrop {
     border-color: var(--accent);
 }
 
+.btn-delete-item {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #999;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.btn-delete-item:hover {
+    background: #fee;
+    color: #f44;
+}
+
+.approval-add-section {
+    padding: 8px 12px;
+}
+
+.btn-add-item {
+    width: 100%;
+    padding: 8px 16px;
+    border: 1px dashed var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.btn-add-item:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
 .approval-actions {
     display: flex;
     gap: 12px;
