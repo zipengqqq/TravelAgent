@@ -23,6 +23,14 @@ def async_should_end(state: PlanExecuteState):
         return False
 
 
+def async_check_cancelled(state: PlanExecuteState):
+    """人机交互节点后判断是否继续执行"""
+    cancelled = state.get("cancelled", False)
+    if cancelled:
+        return "end"
+    return "executor"
+
+
 async def async_abstract(content: str) -> str:
     """异步将搜索结果提取为摘要"""
     response = await async_llm.ainvoke(summary_prompt.format(search_results=content))

@@ -161,9 +161,10 @@ async def async_human_review_node(state: PlanExecuteState):
         logger.info(f"用户已确认计划：{plan}")
         return {}
 
-    # 用户取消，直接结束
+    # 用户取消，返回空字典，由条件边决定是否结束
     if cancelled:
-        return Command(goto="end")
+        logger.info(f"用户已取消任务")
+        return {"cancelled": True}
 
     queue = get_stream_queue()
     await queue.put({"type": "waiting_for_approval", "data": {"plan": plan}})

@@ -7,7 +7,7 @@
 from langgraph.graph import END, StateGraph, START
 
 from graph.async_config import PlanExecuteState
-from graph.async_function import async_route_by_intent, async_should_end
+from graph.async_function import async_route_by_intent, async_should_end, async_check_cancelled
 from graph.async_nodes import (
     async_router_node,
     async_planner_node,
@@ -54,7 +54,17 @@ async_workflow.add_edge("memory_save", END)
 
 # planner 流程
 async_workflow.add_edge("planner", "human_review")  # 规划 -> 人机交互
-async_workflow.add_edge("human_review", "executor")  # 人机交互 -> 执行者
+
+# 人机交互后根据是否取消决定下一步
+async_workflow.add_conditional_edges(
+    "human_review",
+    async_check_cancelled,
+    {
+        "executor": "executor",
+        "end": END
+    }
+)
+
 async_workflow.add_edge("executor", "plan_summary")  # 执行者 -> 计划总结
 
 # 总结条件分支
