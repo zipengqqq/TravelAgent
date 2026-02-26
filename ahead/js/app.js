@@ -775,12 +775,18 @@ class ChatApp {
             buttonArea.innerHTML = `<div class="approval-status">✓ ${statusMsg}</div>`;
         }
 
-        // 显示打字 indicator
-        this.showTypingIndicator();
+        // 只有在非取消状态下才显示思考中状态栏
+        if (!cancelled) {
+            // 显示打字 indicator
+            this.showTypingIndicator();
 
-        // 重新创建状态面板，以便接收后端的 status 消息
-        // 传入审批卡片作为插入位置参考，使其显示在卡片下方
-        this.createStatusPanel(panel);
+            // 重新创建状态面板，以便接收后端的 status 消息
+            // 传入审批卡片作为插入位置参考，使其显示在卡片下方
+            this.createStatusPanel(panel);
+        } else {
+            // 取消任务，不需要显示状态栏
+            this.isTyping = false;
+        }
 
         let assistantMessageDiv = null;
         let assistantContentEl = null;
