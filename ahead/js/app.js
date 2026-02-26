@@ -709,9 +709,6 @@ class ChatApp {
             buttonArea.innerHTML = `<div class="approval-status">✓ ${statusMsg}</div>`;
         }
 
-        // 添加系统消息
-        this.addMessage(statusMsg, 'assistant');
-
         // 显示打字 indicator
         this.showTypingIndicator();
 
