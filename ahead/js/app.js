@@ -123,8 +123,8 @@ class ChatApp {
         this.showTypingIndicator();
 
         try {
-            const assistantMessageDiv = this.addMessage('', 'assistant');
-            const assistantContentEl = assistantMessageDiv.querySelector('.message-content');
+            let assistantMessageDiv = null;
+            let assistantContentEl = null;
             let assistantText = '';
             let receivedFirstChunk = false;
 
@@ -132,10 +132,12 @@ class ChatApp {
                 message,
                 (chunk) => {
                     if (chunk.type === 'token') {
-                        // Token 级别流式输出
+                        // 只有收到 token 数据时才创建消息气泡
                         if (!receivedFirstChunk) {
                             this.hideTypingIndicator();
                             receivedFirstChunk = true;
+                            assistantMessageDiv = this.addMessage('', 'assistant');
+                            assistantContentEl = assistantMessageDiv.querySelector('.message-content');
                         }
 
                         const token = chunk.data?.content || '';
@@ -153,6 +155,8 @@ class ChatApp {
                             if (!receivedFirstChunk) {
                                 this.hideTypingIndicator();
                                 receivedFirstChunk = true;
+                                assistantMessageDiv = this.addMessage('', 'assistant');
+                                assistantContentEl = assistantMessageDiv.querySelector('.message-content');
                             }
 
                             assistantText = chunk.data.response;
@@ -177,6 +181,10 @@ class ChatApp {
                     }
                 },
                 () => {
+                    // 如果没有收到任何 token，移除空的消息气泡
+                    if (!receivedFirstChunk && assistantMessageDiv) {
+                        assistantMessageDiv.remove();
+                    }
                     conversation.updatedAt = Date.now();
                     this.renderChatList();
                     this.isTyping = false;
@@ -712,8 +720,8 @@ class ChatApp {
         // 显示打字 indicator
         this.showTypingIndicator();
 
-        const assistantMessageDiv = this.addMessage('', 'assistant');
-        const assistantContentEl = assistantMessageDiv.querySelector('.message-content');
+        let assistantMessageDiv = null;
+        let assistantContentEl = null;
         let assistantText = '';
         let receivedFirstChunk = false;
 
@@ -725,9 +733,12 @@ class ChatApp {
                 cancelled,
                 (chunk) => {
                     if (chunk.type === 'token') {
+                        // 只有收到 token 数据时才创建消息气泡
                         if (!receivedFirstChunk) {
                             this.hideTypingIndicator();
                             receivedFirstChunk = true;
+                            assistantMessageDiv = this.addMessage('', 'assistant');
+                            assistantContentEl = assistantMessageDiv.querySelector('.message-content');
                         }
                         const token = chunk.data?.content || '';
                         assistantText += token;
@@ -744,6 +755,11 @@ class ChatApp {
                     }
                 },
                 () => {
+                    this.hideTypingIndicator();
+                    // 如果没有收到任何 token，移除空的消息气泡
+                    if (!receivedFirstChunk && assistantMessageDiv) {
+                        assistantMessageDiv.remove();
+                    }
                     this.isTyping = false;
                     this.handleInput();
                 },
