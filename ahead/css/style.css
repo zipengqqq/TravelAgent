@@ -1009,6 +1009,10 @@ body.sidebar-open .sidebar-backdrop {
     background: var(--bg-secondary);
     color: var(--text-primary);
     transition: border-color 0.2s;
+    resize: none;
+    min-height: 60px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .plan-input:focus {

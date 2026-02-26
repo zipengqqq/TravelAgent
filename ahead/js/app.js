@@ -655,7 +655,7 @@ class ChatApp {
             planHtml += `
                 <div class="approval-plan-item">
                     <span class="plan-number">${index + 1}</span>
-                    <input type="text" class="plan-input" value="${this.escapeHtml(item)}" data-index="${index}">
+                    <textarea class="plan-input" data-index="${index}" readonly>${this.escapeHtml(item)}</textarea>
                 </div>
             `;
         });
@@ -676,6 +676,13 @@ class ChatApp {
 
         this.messagesContainer.appendChild(approvalDiv);
         this.scrollToBottom();
+
+        // 根据内容自动调整 textarea 高度
+        const textareas = approvalDiv.querySelectorAll('.plan-input');
+        textareas.forEach(textarea => {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        });
 
         // 绑定事件
         const btnApprove = approvalDiv.querySelector('.btn-approve');
