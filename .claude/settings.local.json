@@ -30,7 +30,9 @@
       "mcp__MiniMax__web_search",
       "Bash(pip show:*)",
       "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip show:*)",
-      "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip install:*)"
+      "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip install:*)",
+      "WebFetch(domain:www.modelscope.cn)",
+      "WebFetch(domain:modelscope.cn)"
     ]
   }
 }
