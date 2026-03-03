@@ -8,16 +8,16 @@ TravelAgent 是一个基于 Python 的 AI 旅行规划智能体，使用 LangGra
 
 ## 环境设置
 
-项目使用 conda 环境 `travel-agent`。**所有 Python 命令都必须在此环境中运行**。
+项目使用 conda 环境 `travel-agent311`。**所有 Python 命令都必须在此环境中运行**。
 
 激活环境：
 ```bash
-conda activate travel-agent
+conda activate travel-agent311
 ```
 
 或者在 Git Bash 中：
 ```bash
-source "C:/Users/apeng/anaconda3/etc/profile.d/conda.sh" && conda activate travel-agent
+source "C:/Users/apeng/anaconda3/etc/profile.d/conda.sh" && conda activate travel-agent311
 ```
 
 ## 运行应用

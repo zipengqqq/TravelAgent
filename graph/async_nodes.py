@@ -4,18 +4,19 @@
 将所有同步节点转换为异步
 """
 
-import json
+from langchain_core.messages import HumanMessage
+from langchain_core.utils.function_calling import convert_to_openai_function
+from langgraph.types import interrupt
 
-from langgraph.types import interrupt, Command
-
-from graph.async_config import PlanExecuteState, async_llm, Plan, async_tavily_tool
+from graph.async_config import PlanExecuteState, async_llm, Plan
 from graph.async_function import async_abstract
 from graph.async_memory_rag import async_memory_rag
 from graph.prompts import (
     route_prompt, direct_answer_prompt, planner_prompt,
-    search_query_prompt, plan_summary_prompt
+    plan_summary_prompt
 )
 from graph.stream_callback import create_streaming_llm, get_stream_queue
+from mcp_tools.tool_registry import get_mcp_tools
 from utils.logger_util import logger
 from utils.parse_llm_json_util import parse_llm_json
 
@@ -175,36 +176,16 @@ async def async_human_review_node(state: PlanExecuteState):
 
 
 async def async_executor_node(state: PlanExecuteState):
-    """执行者：取出计划中的第一个任务"""
+    """ReAct 执行者：使用 MCP 工具执行任务"""
     plan = state['plan']
     task = plan[0]
 
-    logger.info(f"🚀执行者正在执行任务：{task}")
+    logger.info(f"🚀 ReAct 执行者正在执行任务：{task}")
 
-    # 1) 异步生成搜索关键词
-    search_query_prompt_text = search_query_prompt.format(task=task)
-    keywords_text = await async_llm.ainvoke(search_query_prompt_text)
-    search_query = keywords_text.content.strip()
-    logger.info(f"搜索关键词：{search_query}")
-
-    # 2）异步调用 Tavily 工具
-    try:
-        search_result = await async_tavily_tool.ainvoke(search_query)
-        # logger.info(f"搜索结果：{search_result}")
-        result_str = json.dumps(search_result, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"搜索失败：{e}")
-        return {"response": f"搜索失败：{e}"}
-    logger.info(f"搜索结果长度为：{len(result_str)}")
-
-    # 3）异步提取摘要
-    result_str = await async_abstract(result_str)
-    logger.info(f"摘要长度为: {len(result_str)}")
-
-    # 计算当前任务序号：已完成任务数 + 1
+    # 计算当前任务序号
     current_task_num = len(state.get('past_steps', [])) + 1
 
-    # 返回给前端，当前正在执行的任务
+    # 发送状态
     queue = get_stream_queue()
     await queue.put({
         "type": "status",
@@ -212,9 +193,75 @@ async def async_executor_node(state: PlanExecuteState):
         "data": {"status": f"当前正在执行任务{current_task_num}：{task}"}
     })
 
+    # 加载 MCP 工具
+    tools = await get_mcp_tools()
+    logger.info(f"已加载 {len(tools)} 个 MCP 工具: {[t.name for t in tools]}")
+
+    # 将工具转换为函数格式
+    functions = [convert_to_openai_function(tool) for tool in tools]
+    llm_with_tools = async_llm.bind(functions=functions)
+
+    # ReAct 循环
+    messages = [HumanMessage(content=f"请帮我完成以下任务：{task}\n\n请根据任务需求选择合适的工具进行搜索或查询，并总结结果。")]
+
+    max_iterations = len(tools) + 5
+    for i in range(max_iterations):
+        logger.info(f"ReAct 迭代 {i+1}/{max_iterations}")
+
+        # 调用 LLM
+        response = await llm_with_tools.ainvoke(messages)
+
+        # 检查工具调用
+        tool_calls = getattr(response, 'tool_calls', None)
+        if tool_calls:
+            for tool_call in tool_calls:
+                tool_name = tool_call['name']
+                tool_args = tool_call.get('args', {})
+
+                # 查找并调用工具
+                tool = next((t for t in tools if t.name == tool_name), None)
+                if tool:
+                    logger.info(f"调用工具: {tool_name}, 参数: {tool_args}")
+                    result = await tool.ainvoke(tool_args)
+                    logger.info(f"工具返回结果长度: {len(str(result))}")
+
+                    # 将结果添加到消息历史
+                    messages.append(response)
+                    messages.append(HumanMessage(content=f"Observation: {result}"))
+
+                    # 发送状态更新
+                    await queue.put({
+                        "type": "status",
+                        "node": "executor",
+                        "data": {"status": f"当前正在执行任务{current_task_num}：{task}"}
+                    })
+                    
+                else:
+                    logger.warning(f"未找到工具: {tool_name}")
+                    messages.append(response)
+                    messages.append(HumanMessage(content=f"未找到工具: {tool_name}"))
+        else:
+            # 没有工具调用，返回最终答案
+            result_str = response.content
+            logger.info(f"ReAct 执行完成，最终结果长度: {len(result_str)}")
+
+            # 摘要（如果结果太长）
+            if len(result_str) > 2000:
+                result_str = await async_abstract(result_str)
+
+            return {
+                "past_steps": [(task, result_str)],
+                "plan": plan[1:]
+            }
+
+    # 超过迭代次数
+    logger.warning(f"达到最大迭代次数 {max_iterations}")
+    final_messages = [m for m in messages if isinstance(m, HumanMessage)]
+    result_str = final_messages[-1].content if final_messages else "搜索结果总结"
+
     return {
         "past_steps": [(task, result_str)],
-        "plan": plan[1:]  # 剔除第一个任务
+        "plan": plan[1:]
     }
 
 
