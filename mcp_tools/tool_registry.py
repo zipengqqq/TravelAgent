@@ -14,6 +14,7 @@ from langchain_core.tools import BaseTool
 # 导入已有的 MCP 客户端
 from mcp_tools.bing_mcp_server import get_bing_mcp, close_bing_mcp
 from mcp_tools.gaode_mcp_server import get_gaode_mcp, close_gaode_mcp
+from mcp_tools.train12306_mcp_server import get_train_mcp, close_train_mcp
 
 
 class BingSearchTool(BaseTool):
@@ -128,6 +129,170 @@ class GaodeDistanceTool(BaseTool):
         return asyncio.get_event_loop().run_until_complete(self._arun(origins, destination, type))
 
 
+# ========== 12306 火车票工具 ==========
+
+class TrainCurrentDateTool(BaseTool):
+    """12306 - 获取当前日期"""
+    name: str = "train_current_date"
+    description: str = "获取当前日期（以上海时区 UTC+8 为准）。用于解析用户提到的相对日期（如'明天'、'下周三'），返回格式为 yyyy-MM-dd。"
+
+    async def _arun(self) -> str:
+        client = await get_train_mcp()
+        result = await client.get_current_date()
+        return str(result)
+
+    def _run(self) -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun())
+
+
+class TrainStationCodeTool(BaseTool):
+    """12306 - 获取城市站点代码"""
+    name: str = "train_station_code"
+    description: str = "通过城市名获取12306站点代码。输入城市名称（如'北京'、'上海'），返回对应的火车站代码。用于为余票查询准备参数。"
+
+    async def _arun(self, city: str) -> str:
+        client = await get_train_mcp()
+        result = await client.get_station_code_of_citys(city)
+        return str(result)
+
+    def _run(self, city: str) -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(city))
+
+
+class TrainStationCodeByNameTool(BaseTool):
+    """12306 - 通过车站名获取代码"""
+    name: str = "train_station_code_by_name"
+    description: str = "通过具体车站名获取12306代码。输入车站名称（如'北京南'、'上海虹桥'），返回对应的车站代码。"
+
+    async def _arun(self, station_name: str) -> str:
+        client = await get_train_mcp()
+        result = await client.get_station_code_by_names(station_name)
+        return str(result)
+
+    def _run(self, station_name: str) -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(station_name))
+
+
+class TrainStationsInCityTool(BaseTool):
+    """12306 - 获取城市所有车站"""
+    name: str = "train_stations_in_city"
+    description: str = "查询城市所有火车站信息。输入城市名称，返回该城市所有火车站的名称和代码列表。"
+
+    async def _arun(self, city: str) -> str:
+        client = await get_train_mcp()
+        result = await client.get_stations_code_in_city(city)
+        return str(result)
+
+    def _run(self, city: str) -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(city))
+
+
+class TrainTicketsTool(BaseTool):
+    """12306 - 查询余票信息"""
+    name: str = "train_tickets"
+    description: str = "查询12306火车票余票信息。输入日期、出发地代码、到达地代码，可选筛选条件（车次类型如G/D/Z/T/K、出发时间范围、排序方式）。返回余票详情。"
+
+    async def _arun(
+        self,
+        date: str,
+        from_station: str,
+        to_station: str,
+        train_filter_flags: str = "",
+        earliest_start_time: int = 0,
+        latest_start_time: int = 24,
+        sort_flag: str = "",
+        format: str = "text"
+    ) -> str:
+        client = await get_train_mcp()
+        result = await client.get_tickets(
+            date=date,
+            from_station=from_station,
+            to_station=to_station,
+            train_filter_flags=train_filter_flags,
+            earliest_start_time=earliest_start_time,
+            latest_start_time=latest_start_time,
+            sort_flag=sort_flag,
+            format=format
+        )
+        return str(result)
+
+    def _run(
+        self,
+        date: str,
+        from_station: str,
+        to_station: str,
+        train_filter_flags: str = "",
+        earliest_start_time: int = 0,
+        latest_start_time: int = 24,
+        sort_flag: str = "",
+        format: str = "text"
+    ) -> str:
+        return asyncio.get_event_loop().run_until_complete(
+            self._arun(date, from_station, to_station, train_filter_flags,
+                      earliest_start_time, latest_start_time, sort_flag, format)
+        )
+
+
+class TrainInterlineTool(BaseTool):
+    """12306 - 查询中转票"""
+    name: str = "train_interline"
+    description: str = "查询12306中转换乘方案。当没有直达列车时，输入日期、出发地、到达地，可选指定中转站，返回中转余票信息。"
+
+    async def _arun(
+        self,
+        date: str,
+        from_station: str,
+        to_station: str,
+        middle_station: str = "",
+        train_filter_flags: str = "",
+        earliest_start_time: int = 0,
+        latest_start_time: int = 24,
+        format: str = "text"
+    ) -> str:
+        client = await get_train_mcp()
+        result = await client.get_interline_tickets(
+            date=date,
+            from_station=from_station,
+            to_station=to_station,
+            middle_station=middle_station,
+            train_filter_flags=train_filter_flags,
+            earliest_start_time=earliest_start_time,
+            latest_start_time=latest_start_time,
+            format=format
+        )
+        return str(result)
+
+    def _run(
+        self,
+        date: str,
+        from_station: str,
+        to_station: str,
+        middle_station: str = "",
+        train_filter_flags: str = "",
+        earliest_start_time: int = 0,
+        latest_start_time: int = 24,
+        format: str = "text"
+    ) -> str:
+        return asyncio.get_event_loop().run_until_complete(
+            self._arun(date, from_station, to_station, middle_station,
+                      train_filter_flags, earliest_start_time, latest_start_time, format)
+        )
+
+
+class TrainRouteStationsTool(BaseTool):
+    """12306 - 查询列车途径车站"""
+    name: str = "train_route_stations"
+    description: str = "查询特定列车车次的途径车站信息。输入车次（如G1033）和日期，返回该车次在指定日期的详细停靠站信息（到站时间、出发时间、停留时间）。"
+
+    async def _arun(self, train_code: str, date: str, format: str = "text") -> str:
+        client = await get_train_mcp()
+        result = await client.get_train_route_stations(train_code, date, format)
+        return str(result)
+
+    def _run(self, train_code: str, date: str, format: str = "text") -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(train_code, date, format))
+
+
 # 工具缓存
 _mcp_tools: List[BaseTool] = []
 
@@ -145,6 +310,14 @@ async def load_mcp_tools() -> List[BaseTool]:
             GaodeGeocodeTool(),
             GaodeRegeocodeTool(),
             GaodeDistanceTool(),
+            # 12306 火车票工具
+            TrainCurrentDateTool(),
+            TrainStationCodeTool(),
+            TrainStationCodeByNameTool(),
+            TrainStationsInCityTool(),
+            TrainTicketsTool(),
+            TrainInterlineTool(),
+            TrainRouteStationsTool(),
         ]
     return _mcp_tools
 
@@ -158,3 +331,4 @@ async def close_all_mcp():
     """关闭所有 MCP 连接"""
     await close_bing_mcp()
     await close_gaode_mcp()
+    await close_train_mcp()

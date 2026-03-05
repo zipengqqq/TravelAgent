@@ -19,7 +19,7 @@ async def main():
     state: PlanExecuteState = {
         "question": "北京今天天气怎么样？",
         # "plan": ["从北京市天安门到上海外滩怎么走？"],
-        "plan": ["我在郑州中原区国弘时代广场，离我家有多远，我家在中原区东史马小区"],
+        "plan": ["帮我查一下明天从北京到上海的火车"],
         "past_steps": [],
         "response": "",
         "route": "planner",
