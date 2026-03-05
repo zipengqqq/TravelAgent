@@ -211,7 +211,6 @@ async def async_executor_node(state: PlanExecuteState):
 
     # 加载 MCP 工具
     tools = await get_mcp_tools()
-    logger.info(f"已加载 {len(tools)} 个 MCP 工具: {[t.name for t in tools]}")
 
     # 使用 create_agent
     from graph.middleware import log_tool_call

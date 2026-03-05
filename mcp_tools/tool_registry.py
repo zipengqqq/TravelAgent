@@ -319,6 +319,8 @@ async def load_mcp_tools() -> List[BaseTool]:
             TrainInterlineTool(),
             TrainRouteStationsTool(),
         ]
+        from utils.logger_util import logger
+        logger.info(f"已加载 {len(_mcp_tools)} 个 MCP 工具: {[t.name for t in _mcp_tools]}")
     return _mcp_tools
 
 
