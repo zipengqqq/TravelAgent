@@ -19,7 +19,7 @@ async def main():
     state: PlanExecuteState = {
         "question": "北京今天天气怎么样？",
         # "plan": ["从北京市天安门到上海外滩怎么走？"],
-        "plan": ["北京天气怎么样？"],
+        "plan": ["如何学好langgraph，LangGraph 中最核心的功能是什么"],
         "past_steps": [],
         "response": "",
         "route": "planner",

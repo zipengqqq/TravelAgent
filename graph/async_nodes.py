@@ -214,8 +214,15 @@ async def async_executor_node(state: PlanExecuteState):
     logger.info(f"已加载 {len(tools)} 个 MCP 工具: {[t.name for t in tools]}")
 
     # 使用 create_agent
+    from graph.middleware import log_tool_call
+
     system_prompt = "You are a helpful assistant that can use tools."
-    agent = create_agent(executor_llm, tools, system_prompt=system_prompt)
+    agent = create_agent(
+        executor_llm,
+        tools,
+        system_prompt=system_prompt,
+        middleware=[log_tool_call]
+    )
 
     # 调用 agent 执行任务
     result = await agent.ainvoke({"messages": [task]})
