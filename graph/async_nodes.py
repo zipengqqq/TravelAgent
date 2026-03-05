@@ -7,6 +7,21 @@
 from langchain_core.messages import HumanMessage
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langgraph.types import interrupt
+from langchain_openai import ChatOpenAI
+
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+# 不开启 streaming 的 LLM（用于 function calling）
+executor_llm = ChatOpenAI(
+    model="deepseek-chat",
+    api_key=os.getenv('DEEPSEEK_API_KEY'),
+    base_url=os.getenv('DEEPSEEK_BASE_URL'),
+    temperature=0.7,
+    streaming=False,
+    max_retries=2
+)
 
 from graph.async_config import PlanExecuteState, async_llm, Plan
 from graph.async_function import async_abstract
@@ -176,7 +191,9 @@ async def async_human_review_node(state: PlanExecuteState):
 
 
 async def async_executor_node(state: PlanExecuteState):
-    """ReAct 执行者：使用 MCP 工具执行任务"""
+    """ReAct 执行者：使用 MCP 工具执行任务（基于 LangChain create_agent）"""
+    from langchain.agents import create_agent
+
     plan = state['plan']
     task = plan[0]
 
@@ -197,67 +214,23 @@ async def async_executor_node(state: PlanExecuteState):
     tools = await get_mcp_tools()
     logger.info(f"已加载 {len(tools)} 个 MCP 工具: {[t.name for t in tools]}")
 
-    # 将工具转换为函数格式
-    functions = [convert_to_openai_function(tool) for tool in tools]
-    llm_with_tools = async_llm.bind(functions=functions)
+    # 使用 create_agent
+    system_prompt = "You are a helpful assistant that can use tools."
+    agent = create_agent(executor_llm, tools, system_prompt=system_prompt)
 
-    # ReAct 循环
-    messages = [HumanMessage(content=f"请帮我完成以下任务：{task}\n\n请根据任务需求选择合适的工具进行搜索或查询，并总结结果。")]
+    # 调用 agent 执行任务
+    result = await agent.ainvoke({"messages": [task]})
 
-    max_iterations = len(tools) + 5
-    for i in range(max_iterations):
-        logger.info(f"ReAct 迭代 {i+1}/{max_iterations}")
+    # 从结果中提取最终回复
+    messages = result.get("messages", [])
+    final_message = messages[-1] if messages else None
+    result_str = final_message.content if final_message else "任务完成"
 
-        # 调用 LLM
-        response = await llm_with_tools.ainvoke(messages)
+    logger.info(f"ReAct 执行完成，结果长度: {len(result_str)}")
 
-        # 检查工具调用
-        tool_calls = getattr(response, 'tool_calls', None)
-        if tool_calls:
-            for tool_call in tool_calls:
-                tool_name = tool_call['name']
-                tool_args = tool_call.get('args', {})
-
-                # 查找并调用工具
-                tool = next((t for t in tools if t.name == tool_name), None)
-                if tool:
-                    logger.info(f"调用工具: {tool_name}, 参数: {tool_args}")
-                    result = await tool.ainvoke(tool_args)
-                    logger.info(f"工具返回结果长度: {len(str(result))}")
-
-                    # 将结果添加到消息历史
-                    messages.append(response)
-                    messages.append(HumanMessage(content=f"Observation: {result}"))
-
-                    # 发送状态更新
-                    await queue.put({
-                        "type": "status",
-                        "node": "executor",
-                        "data": {"status": f"当前正在执行任务{current_task_num}：{task}"}
-                    })
-                    
-                else:
-                    logger.warning(f"未找到工具: {tool_name}")
-                    messages.append(response)
-                    messages.append(HumanMessage(content=f"未找到工具: {tool_name}"))
-        else:
-            # 没有工具调用，返回最终答案
-            result_str = response.content
-            logger.info(f"ReAct 执行完成，最终结果长度: {len(result_str)}")
-
-            # 摘要（如果结果太长）
-            if len(result_str) > 2000:
-                result_str = await async_abstract(result_str)
-
-            return {
-                "past_steps": [(task, result_str)],
-                "plan": plan[1:]
-            }
-
-    # 超过迭代次数
-    logger.warning(f"达到最大迭代次数 {max_iterations}")
-    final_messages = [m for m in messages if isinstance(m, HumanMessage)]
-    result_str = final_messages[-1].content if final_messages else "搜索结果总结"
+    # 摘要（如果结果太长）
+    if len(result_str) > 2000:
+        result_str = await async_abstract(result_str)
 
     return {
         "past_steps": [(task, result_str)],
