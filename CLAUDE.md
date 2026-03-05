@@ -55,6 +55,10 @@ python main.py
 # 人机交互示例
 cd learn/human_in_loop
 python server.py
+
+# 图片对话示例
+cd learn/image_chat
+python 01_basic_image_chat.py
 ```
 
 ## 架构设计
@@ -215,6 +219,10 @@ graph/                    # 主智能体工作流
 ├── memory_rag.py         # 同步长期记忆
 ├── async_memory_rag.py   # 异步长期记忆
 ├── stream_callback.py    # 流式回调
+├── mcp_client.py         # MCP 客户端管理器
+├── mcp_config.py         # MCP 服务器配置
+├── tool_registry.py      # 工具注册中心
+├── react_executor.py     # ReAct 执行器
 ├── sync_run.py           # 同步运行入口
 └── async_run.py          # 异步运行入口
 
@@ -226,6 +234,8 @@ learn/
 │   ├── workflow.py       # 人机交互工作流定义
 │   ├── server.py         # FastAPI 服务
 │   └── index.html        # 演示前端页面
+├── image_chat/           # 图片对话示例
+│   └── 01_basic_image_chat.py  # 基础图片对话
 ├── persistence/          # 持久化示例
 │   ├── 01_load_to_db.py  # SQLite 持久化
 │   ├── 02_interupt.py    # 处理中断
@@ -233,7 +243,8 @@ learn/
 │   ├── 04_time_back.py   # 时间旅行
 │   └── 05_long_memory.py # 长期记忆
 ├── react/                # ReAct 模式示例
-│   └── main.py           # ReAct 智能体实现
+│   ├── main.py           # ReAct 智能体实现
+│   └── logs/             # ReAct 执行日志
 └── mcp/                  # MCP 协议集成
     ├── local/             # 本地 MCP 服务器
     │   ├── mcp_agent_demo.py
@@ -269,6 +280,7 @@ logs/                     # 应用日志
 
 - **LangGraph** (~1.0.7): 工作流编排
 - **DeepSeek API**: LLM 提供商（`deepseek-chat` 模型）
+- **Qwen-VL**: 视觉理解模型（多模态对话）
 - **Tavily Search**: 用于旅行信息的网络搜索
 - **PostgreSQL + pgvector**: 状态持久化和向量存储
 - **FastAPI**: 异步 Web 框架，支持 SSE 流式输出
@@ -279,6 +291,7 @@ logs/                     # 应用日志
 - **Loguru**: 结构化日志
 - **httpx**: 异步 HTTP 客户端
 - **ContextVar**: 线程安全的上下文变量（用于流式输出）
+- **Pillow**: 图片处理（压缩、缩略图）
 
 ## 前端实现
 
@@ -314,6 +327,28 @@ logs/                     # 应用日志
 
 详细实现见 `docs/streaming_optimization.md` 和 `learn/stream_nodes/README.md`
 
+## 图片对话功能
+
+项目支持用户上传图片，AI 大模型能够理解图片内容并进行对话，实现多模态交互能力。
+
+### 技术选型
+
+| 组件 | 方案 |
+|------|------|
+| 图片上传 | Base64 编码（初期）、对象存储（生产） |
+| 视觉模型 | Qwen-VL Plus（性价比高） |
+| 图片处理 | Pillow 压缩、缩略图生成 |
+
+### 核心文件
+
+| 文件 | 说明 |
+|------|------|
+| `learn/image_chat/01_basic_image_chat.py` | 基础图片对话示例 |
+| `graph/vision_tools.py` | 图片处理工具 |
+| `api/vision_api.py` | 图片对话 API 接口 |
+
+详细实现见 `docs/image_chat_implementation.md`
+
 ## MCP 集成
 
 `learn/mcp/` 目录包含完整的 MCP 学习指南和实现：
@@ -330,6 +365,15 @@ logs/                     # 应用日志
 **小红书 MCP (`learn/mcp/rednote/`):**
 - 集成小红书内容搜索功能
 - 使用 `uvx --from xiaohongshu-automation xhs-mcp` 调用
+
+**推荐 MCP 服务列表：**
+| 服务 | 功能 |
+|------|------|
+| 高德地图 MCP | IP 定位、天气查询、路径规划（骑行/步行/驾车/公交）、距离测量、关键词搜索、周边搜索、详情搜索 |
+| 必应搜索 MCP | 通用信息搜索 |
+| 12306 MCP | 火车票查询 |
+| 酒店预定 MCP | 酒店搜索 |
+| 飞常准 MCP | 航班信息获取 |
 
 ## 人机交互（Human-in-the-Loop）
 
@@ -372,6 +416,40 @@ logs/                     # 应用日志
 
 详细实现见 `docs/mcp_react_human_integration.md`
 
+## ReAct 模式执行器
+
+项目将执行节点改造为支持 ReAct 模式的智能执行器，实现 "Thought → Action → Observation" 循环推理。
+
+### 核心组件
+
+| 组件 | 位置 | 职责 |
+|------|------|------|
+| `ReActExecutor` | `graph/react_executor.py` | ReAct 循环执行器 |
+| `MCPClientManager` | `graph/mcp_client.py` | MCP 客户端管理器 |
+| `ToolRegistry` | `graph/tool_registry.py` | 工具注册与路由 |
+
+### ReAct 执行流程
+
+```
+1. LLM 生成 Thought（思考）
+2. 解析 Action（工具名称和输入）
+3. 执行工具，获取 Observation（观察结果）
+4. 将观察结果反馈给 LLM，继续推理
+5. 循环直到得到 Final Answer
+```
+
+### 工具选择策略
+
+| 任务类型 | 推荐工具 |
+|----------|----------|
+| 查询景点信息 | `tavily_search` |
+| 查询天气 | 高德天气 MCP |
+| 规划路线 | 高德路径规划 MCP |
+| 查看旅行攻略 | 小红书 MCP |
+| 备用搜索 | 必应搜索 MCP |
+
+详细实现见 `docs/executor_react_mcp_integration.md`
+
 ## 环境变量
 
 `.env` 中必需：
@@ -381,6 +459,19 @@ ASYNC_POSTGRES_URI=postgresql+asyncpg://postgres:password@host:5432/postgres
 DEEPSEEK_API_KEY=sk-xxx
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 TAVILY_API_KEY=tvly-xxx
+
+# 视觉模型配置（图片对话功能）
+DASHSCOPE_API_KEY=sk-xxx  # 通义千问视觉模型 API Key
+
+# 可选：图片存储
+IMAGE_STORAGE_TYPE=local  # local | oss
+OSS_ENDPOINT=xxx
+OSS_BUCKET=xxx
+OSS_ACCESS_KEY=xxx
+OSS_SECRET_KEY=xxx
+
+# MCP 服务配置
+AMAP_MAPS_API_KEY=your-api-key  # 高德地图 MCP
 ```
 
 ## API 设计规范
@@ -446,6 +537,9 @@ pytest tests/test_long_memory_integration.py
 - `conversation_interface.md`: 对话接口设计说明
 - `mcp_react_human_integration.md`: MCP、ReAct 与人机交互集成方案
 - `executor_react_migration.md`: 执行器 ReAct 化改造方案
+- `executor_react_mcp_integration.md`: 执行节点 ReAct 化与 MCP 集成技术方案
+- `image_chat_implementation.md`: 图片对话功能技术方案
+- `mcp_service_selection.md`: 推荐 MCP 服务列表（高德地图、必应搜索、12306、酒店预定、飞常准）
 
 ## 主应用入口
 
