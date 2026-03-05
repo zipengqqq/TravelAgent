@@ -216,7 +216,16 @@ async def async_executor_node(state: PlanExecuteState):
     # 使用 create_agent
     from graph.middleware import log_tool_call
 
-    system_prompt = "You are a helpful assistant that can use tools."
+    # 构建带上下文的任务描述
+    question = state.get('question', '')
+    total_tasks = len(plan)
+    context_task = f"""用户问题：{question}
+
+当前任务（第{current_task_num}/{total_tasks}步）：{task}
+
+请执行这个任务，提供相关信息。"""
+
+    system_prompt = "你是一个专业的旅行助手，可以使用工具来完成任务。"
     agent = create_agent(
         executor_llm,
         tools,
@@ -224,8 +233,8 @@ async def async_executor_node(state: PlanExecuteState):
         middleware=[log_tool_call]
     )
 
-    # 调用 agent 执行任务
-    result = await agent.ainvoke({"messages": [task]})
+    # 调用 agent 执行任务（带上下文）
+    result = await agent.ainvoke({"messages": [context_task]})
 
     # 从结果中提取最终回复
     messages = result.get("messages", [])
