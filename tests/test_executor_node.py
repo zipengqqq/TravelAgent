@@ -18,7 +18,8 @@ async def main():
     # 构造输入状态
     state: PlanExecuteState = {
         "question": "北京今天天气怎么样？",
-        "plan": ["从北京市天安门到上海外滩怎么走？"],
+        # "plan": ["从北京市天安门到上海外滩怎么走？"],
+        "plan": ["北京天气怎么样？"],
         "past_steps": [],
         "response": "",
         "route": "planner",

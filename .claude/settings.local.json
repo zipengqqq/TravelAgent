@@ -32,7 +32,8 @@
       "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip show:*)",
       "Bash(/Users/penn/anaconda3/envs/travel-agent/bin/pip install:*)",
       "WebFetch(domain:www.modelscope.cn)",
-      "WebFetch(domain:modelscope.cn)"
+      "WebFetch(domain:modelscope.cn)",
+      "WebFetch(domain:langchain-ai.github.io)"
     ]
   }
 }
