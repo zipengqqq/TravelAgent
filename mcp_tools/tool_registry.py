@@ -8,7 +8,7 @@ MCP 工具注册中心
 """
 
 import asyncio
-from typing import List
+from typing import List, Optional
 from langchain_core.tools import BaseTool
 
 # 导入已有的 MCP 客户端
@@ -86,6 +86,48 @@ class GaodeAroundSearchTool(BaseTool):
         return asyncio.get_event_loop().run_until_complete(self._arun(location, keywords, radius))
 
 
+class GaodeGeocodeTool(BaseTool):
+    """高德地图 - 地理编码（地址转经纬度）"""
+    name: str = "maps_geo"
+    description: str = "地理编码。将地址转换为经纬度坐标。输入地址和可选城市名，返回经纬度信息。"
+
+    async def _arun(self, address: str, city: Optional[str] = None) -> str:
+        client = await get_gaode_mcp()
+        result = await client.geocode(address, city)
+        return str(result)
+
+    def _run(self, address: str, city: Optional[str] = None) -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(address, city))
+
+
+class GaodeRegeocodeTool(BaseTool):
+    """高德地图 - 逆地理编码（经纬度转地址）"""
+    name: str = "maps_regeocode"
+    description: str = "逆地理编码。将经纬度坐标转换为地址信息。输入经纬度和可选参数，返回地址详情。"
+
+    async def _arun(self, location: str, radius: str = "0", extensions: str = "base") -> str:
+        client = await get_gaode_mcp()
+        result = await client.regeocode(location, radius, extensions)
+        return str(result)
+
+    def _run(self, location: str, radius: str = "0", extensions: str = "base") -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(location, radius, extensions))
+
+
+class GaodeDistanceTool(BaseTool):
+    """高德地图 - 距离计算"""
+    name: str = "maps_distance"
+    description: str = "距离计算。输入起点和终点经纬度，返回两点之间的距离。type=0直线距离，type=1驾车距离，type=3步行距离。"
+
+    async def _arun(self, origins: str, destination: str, type: str = "0") -> str:
+        client = await get_gaode_mcp()
+        result = await client.distance(origins, destination, type)
+        return str(result)
+
+    def _run(self, origins: str, destination: str, type: str = "0") -> str:
+        return asyncio.get_event_loop().run_until_complete(self._arun(origins, destination, type))
+
+
 # 工具缓存
 _mcp_tools: List[BaseTool] = []
 
@@ -100,6 +142,9 @@ async def load_mcp_tools() -> List[BaseTool]:
             GaodeDrivingTool(),
             GaodeTransitTool(),
             GaodeAroundSearchTool(),
+            GaodeGeocodeTool(),
+            GaodeRegeocodeTool(),
+            GaodeDistanceTool(),
         ]
     return _mcp_tools
 

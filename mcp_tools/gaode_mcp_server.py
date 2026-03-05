@@ -128,6 +128,48 @@ class GaodeMCP:
             args["types"] = types
         return await self.call_tool("maps_text_search", args)
 
+    # ========== 地理编码 ==========
+    async def geocode(self, address: str, city: Optional[str] = None) -> Any:
+        """地理编码 - 地址转换为经纬度
+
+        Args:
+            address: 地址字符串，如 "北京市朝阳区望京SOHO"
+            city: 可选，城市名，用于提高精度，如 "北京"
+        """
+        args = {"address": address}
+        if city:
+            args["city"] = city
+        return await self.call_tool("maps_geo", args)
+
+    async def regeocode(self, location: str, radius: str = "0", extensions: str = "base") -> Any:
+        """逆地理编码 - 经纬度转换为地址
+
+        Args:
+            location: 经纬度坐标，格式 "经度,纬度"，如 "116.397428,39.90923"
+            radius: 搜索半径，默认0（精确匹配），范围0-1000米
+            extensions: 返回结果类型，base=基本信息，all=全部信息
+        """
+        return await self.call_tool("maps_regeocode", {
+            "location": location,
+            "radius": radius,
+            "extensions": extensions
+        })
+
+    # ========== 距离计算 ==========
+    async def distance(self, origins: str, destination: str, type: str = "0") -> Any:
+        """距离计算 - 计算两点之间的距离
+
+        Args:
+            origins: 起点经纬度，格式 "经度,纬度"，如 "116.397428,39.90923"，多个坐标用竖线分隔
+            destination: 终点经纬度，格式 "经度,纬度"，如 "116.397428,39.90923"
+            type: 距离测量类型，0=直线距离，1=驾车距离，3=步行距离，默认0
+        """
+        return await self.call_tool("maps_distance", {
+            "origins": origins,
+            "destination": destination,
+            "type": type
+        })
+
 
 # 全局客户端实例 (用于 ReAct agent)
 _client: Optional[GaodeMCP] = None
@@ -198,6 +240,26 @@ async def test():
         # 关键字搜索
         print("\n[关键字搜索] 郑州酒店:")
         result = await client.text_search("酒店", "郑州")
+        print(result)
+
+        # ========== 地理编码 ==========
+        print("\n" + "=" * 50)
+        print("4. 测试地理编码:")
+        print("=" * 50)
+
+        # 地理编码
+        print("\n[地理编码] 北京市朝阳区望京SOHO:")
+        result = await client.geocode("北京市朝阳区望京SOHO", "北京")
+        print(result)
+
+        # 逆地理编码
+        print("\n[逆地理编码] 北京天安门经纬度:")
+        result = await client.regeocode("116.397428,39.90923")
+        print(result)
+
+        # 距离计算
+        print("\n[距离计算] 天安门到故宫:")
+        result = await client.distance("116.397428,39.90923", "116.4100,39.9163")
         print(result)
 
 
