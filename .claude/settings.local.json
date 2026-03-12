@@ -34,7 +34,8 @@
       "WebFetch(domain:www.modelscope.cn)",
       "WebFetch(domain:modelscope.cn)",
       "WebFetch(domain:langchain-ai.github.io)",
-      "Bash(npx -y 12306-mcp 2>&1 | head -20)"
+      "Bash(npx -y 12306-mcp 2>&1 | head -20)",
+      "mcp__plugin_prompts_chat_prompts_chat__search_skills"
     ]
   }
 }
