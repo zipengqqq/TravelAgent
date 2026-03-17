@@ -35,7 +35,10 @@
       "WebFetch(domain:modelscope.cn)",
       "WebFetch(domain:langchain-ai.github.io)",
       "Bash(npx -y 12306-mcp 2>&1 | head -20)",
-      "mcp__plugin_prompts_chat_prompts_chat__search_skills"
+      "mcp__plugin_prompts_chat_prompts_chat__search_skills",
+      "Bash(ls -la ~/.claude/*.json 2>/dev/null)",
+      "Bash(conda run -n travel-agent311 python -c \"import main; print\\('Import successful'\\)\" 2>&1)",
+      "Bash(ls -la /Users/penn/work/TravelAgent/*.py | head -10)"
     ]
   }
 }
