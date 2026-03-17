@@ -639,6 +639,7 @@ class ChatApp {
      */
     showApprovalPanel(data) {
         const plan = data?.plan || [];
+        const question = data?.question || "";
         const conversation = this.getActiveConversation();
         const threadId = conversation?.threadId;
 
@@ -649,6 +650,7 @@ class ChatApp {
         const approvalDiv = document.createElement('div');
         approvalDiv.className = 'approval-panel';
         approvalDiv.dataset.originalPlan = JSON.stringify(originalPlan);
+        approvalDiv.dataset.question = question;
 
         let planHtml = '';
         plan.forEach((item, index) => {
@@ -760,6 +762,9 @@ class ChatApp {
     async submitApproval(threadId, approved, plan, cancelled, panel) {
         if (!threadId) return;
 
+        // 获取保存的问题
+        const question = panel?.dataset?.question || "";
+
         // 禁用按钮
         const buttons = panel.querySelectorAll('button');
         buttons.forEach(btn => btn.disabled = true);
@@ -799,6 +804,7 @@ class ChatApp {
                 approved,
                 plan,
                 cancelled,
+                question,
                 (chunk) => {
                     if (chunk.type === 'token') {
                         // 只有收到 token 数据时才创建消息气泡

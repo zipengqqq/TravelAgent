@@ -100,11 +100,12 @@ class TravelAgentAPI {
      * @param {boolean} approved - 是否批准
      * @param {Array} plan - 修改后的规划（可选）
      * @param {boolean} cancelled - 是否取消
+     * @param {string} question - 原始用户问题
      * @param {Function} onChunk - 接收数据块的回调
      * @param {Function} onComplete - 完成回调
      * @param {Function} onError - 错误回调
      */
-    async approveStream(threadId, approved, plan, cancelled, onChunk, onComplete, onError) {
+    async approveStream(threadId, approved, plan, cancelled, question, onChunk, onComplete, onError) {
         try {
             const url = `${this.baseURL}/approve`;
             const response = await fetch(url, {
@@ -116,7 +117,8 @@ class TravelAgentAPI {
                     thread_id: threadId,
                     approved: approved,
                     plan: plan,
-                    cancelled: cancelled
+                    cancelled: cancelled,
+                    question: question || ""
                 })
             });
 

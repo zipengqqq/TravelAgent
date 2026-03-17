@@ -1,14 +1,17 @@
 import asyncio
-import inspect
+import json
 import os
+import re
 import traceback
 from datetime import datetime
+from typing import AsyncGenerator
 
 from langchain_openai import ChatOpenAI
-from langgraph.errors import GraphInterrupt
+from langchain_core.messages import HumanMessage
 
-from graph.async_workflow import async_workflow, compiled_async_workflow
-from graph.stream_callback import set_stream_queue
+from graph.minimal_agent import minimal_react_agent
+from graph.tools.core_tools import save_memory, execute_plan_steps, summarize_and_respond
+from graph.stream_callback import set_stream_queue, get_stream_queue, create_streaming_llm
 from pojo.entity.conversation_entity import Conversation
 from pojo.request.chat_request import ChatRequest
 from pojo.request.conversation_add_request import ConversationAddRequest
@@ -25,78 +28,28 @@ llm = ChatOpenAI(
     api_key=os.getenv('DEEPSEEK_API_KEY'),
     base_url=os.getenv('DEEPSEEK_BASE_URL'),
     temperature=0.7,
-    streaming=True,  # 开启流式
-    max_retries=2  # 添加重试
+    streaming=True,
+    max_retries=2
 )
 
+
 class AssistantService:
+    """基于 MinimalReActAgent 的助手服务"""
+
     def __init__(self):
         self._initialized = False
-        self._init_lock = asyncio.Lock()
-        self._app = None
-        self._pool = None
-        self._checkpointer = None
+        self._pending_plans = {}  # thread_id -> {question, plan}
 
     async def _ensure_initialized(self):
-        """初始化工作流"""
         if self._initialized:
             return
-
-        async with self._init_lock:
-            if self._initialized:
-                return
-
-            db_uri = os.getenv("POSTGRES_URI")
-
-            if db_uri:
-                try:
-                    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-                    from psycopg_pool import AsyncConnectionPool
-
-                    # 配置连接池参数，防止远程 PostgreSQL 服务器关闭空闲连接
-                    self._pool = AsyncConnectionPool(
-                        db_uri,
-                        kwargs={
-                            "autocommit": True,
-                            "keepalives": 1,           # 启用 keepalive
-                            "keepalives_idle": 30,     # 空闲 30 秒后发送 keepalive
-                            "keepalives_interval": 10, # 每 10 秒发送一次
-                            "keepalives_count": 3      # 最多重试 3 次
-                        },
-                        min_size=2,
-                        max_size=10,
-                        timeout=30                    # 连接超时
-                    )
-                    await self._pool.open()
-                    self._checkpointer = AsyncPostgresSaver(self._pool)
-
-                    setup = getattr(self._checkpointer, "setup", None)
-                    if setup is not None:
-                        maybe_awaitable = setup()
-                        if inspect.isawaitable(maybe_awaitable):
-                            await maybe_awaitable
-
-                    self._app = async_workflow.compile(checkpointer=self._checkpointer)
-                    logger.info("AssistantService 初始化完成（启用 Postgres checkpointer）")
-                except Exception as e:
-                    traceback.print_exc()
-                    logger.warning(f"AssistantService 初始化 checkpointer 失败，将使用无持久化工作流: {e}")
-                    self._app = compiled_async_workflow
-            else:
-                self._app = compiled_async_workflow
-                logger.info("AssistantService 初始化完成（未配置 POSTGRES_URI，使用无持久化工作流）")
-
-            self._initialized = True
+        await minimal_react_agent._ensure_initialized()
+        self._initialized = True
 
     async def close(self):
-        """关闭连接池"""
-        if self._pool:
-            await self._pool.close()
-            self._pool = None
-            logger.info("AssistantService 连接池已关闭")
+        pass
 
-    async def chat(self, request: ChatRequest):
-        """流式chatbox实现 - token 级别"""
+    async def chat(self, request: ChatRequest) -> AsyncGenerator[dict, None]:
         await self._ensure_initialized()
 
         question = request.question
@@ -104,105 +57,95 @@ class AssistantService:
         user_id = request.user_id
 
         queue = asyncio.Queue()
-        workflow_done = False
-
-        # 使用 contextvars 设置 queue（避免放入 state 导致序列化失败）
         set_stream_queue(queue)
 
-        state = {
-            "question": question,
-            "plan": [],
-            "past_steps": [],
-            "response": "",
-            "route": "",
-            "messages": [],
-            "user_id": user_id,
-            "memories": [],
-            "approved": False,
-            "cancelled": False
-        }
-
-        config = {"configurable": {"thread_id": thread_id}}
-
-        # 后台运行工作流
-        async def run_workflow():
-            # nonlocal关键字，可以读取外部变量workflow_done并且修改它，如果不加这个关键字，那么workflow_node就不会被修改
-            nonlocal workflow_done
-            interrupted = False
-            try:
-                async for event in self._app.astream(state, config=config):
-                    # 这里可以处理节点级别的事件（如果需要）
-                    pass
-            except GraphInterrupt:
-                # 人机交互中断，节点内部已发送 waiting_for_approval
-                interrupted = True
-            except Exception as e:
-                logger.error(f"工作流执行出错: {e}")
-                await queue.put({"type": "error", "data": {"message": str(e)}})
-            finally:
-                if not interrupted:
-                    await queue.put({"type": "workflow_end"})
-                    workflow_done = True
-
-        # 启动工作流任务
-        workflow_task = asyncio.create_task(run_workflow())
-
         try:
-            while True:
-                # 检查是否结束
-                if workflow_done and queue.empty():
+            await queue.put({"type": "status", "data": {"status": "思考中..."}})
+
+            # 调用 Agent
+            logger.info(f"[Chat] 开始调用 Agent，问题: {question[:50]}...")
+            result = await minimal_react_agent._agent.ainvoke(
+                {"messages": [HumanMessage(content=question)]}
+            )
+            messages = result.get("messages", [])
+
+            # 先提取 tool 结果中的 steps
+            steps = []
+            output = ""
+            for msg in messages:
+                # 检查是否是 tool 结果
+                if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'content'):
+                    try:
+                        tool_data = json.loads(msg.content)
+                        if 'steps' in tool_data and tool_data.get('need_approval'):
+                            steps = tool_data['steps']
+                            logger.info(f"[Chat] 从工具结果提取 steps: {len(steps)} 个")
+                    except Exception as e:
+                        logger.info(f"[Chat] 解析 tool 消息失败: {e}")
+
+            # 获取 AI 的最后回复
+            for msg in reversed(messages):
+                if hasattr(msg, 'type') and msg.type == 'ai' and hasattr(msg, 'content') and msg.content:
+                    output = msg.content
                     break
 
-                # 从队列获取事件（token 或结束信号）
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=0.5)
-                except asyncio.TimeoutError:
-                    # 发送心跳保持连接
-                    yield {
-                        "type": "heartbeat",
-                        "data": {}
-                    }
-                    continue
+            logger.info(f"[Chat] Agent 输出: {output[:200]}...")
 
-                if event.get("type") == "token": # 处理 token 事件
-                    yield {
-                        "type": "token",
-                        "node": event.get("node"),
-                        "data": event.get("data", {})
-                    }
-                elif event.get("type") == "workflow_end": # 处理工作流结束
-                    yield {
-                        "type": "workflow_end",
-                        "data": {}
-                    }
-                elif event.get("type") == "error": # 处理错误
-                    yield {
-                        "type": "error",
-                        "data": event.get("data", {})
-                    }
-                elif event.get("type") == "status": # 处理状态
-                    yield {
-                        "type": "status",
-                        "data": event.get("data", {})
-                    }
-                elif event.get("type") == "waiting_for_approval":  # 人机交互中断
-                    yield {
-                        "type": "waiting_for_approval",
-                        "data": event.get("data", {})
-                    }
+            if steps:
+                # 需要审批
+                self._pending_plans[thread_id] = {
+                    "question": question,
+                    "plan": steps
+                }
+                await queue.put({
+                    "type": "waiting_for_approval",
+                    "data": {"plan": steps, "question": question}
+                })
+                yield {
+                    "type": "waiting_for_approval",
+                    "data": {"plan": steps, "question": question}
+                }
+            else:
+                # 直接返回回答
+                await queue.put({"type": "status", "data": {"status": "生成回答..."}})
 
-        except asyncio.CancelledError:
-            workflow_task.cancel()
-        finally:
-            if not workflow_task.done():
-                workflow_task.cancel()
+                # 直接流式输出 agent 的回复
+                for i in range(0, len(output), 10):
+                    chunk = output[i:i+10]
+                    yield {"type": "token", "data": {"content": chunk}}
+
+                # 保存记忆
+                await save_memory.ainvoke({
+                    "user_id": user_id,
+                    "question": question,
+                    "answer": output
+                })
+
+                await queue.put({"type": "workflow_end", "data": {}})
+                yield {"type": "workflow_end", "data": {}}
+
+        except Exception as e:
+            logger.error(f"对话处理出错: {e}")
+            traceback.print_exc()
+            yield {"type": "error", "data": {"message": str(e)}}
+
+    def _extract_steps(self, output: str) -> list:
+        """从输出中提取步骤"""
+        steps = []
+        try:
+            match = re.search(r'\{[\s\S]*\}', output)
+            if match:
+                data = json.loads(match.group())
+                if "steps" in data and data["steps"]:
+                    steps = data["steps"]
+        except:
+            pass
+        return steps
 
     async def add_conversation(self, request: ConversationAddRequest):
-        """新增对话"""
         thread_id = id_worker.get_id()
         id = id_worker.get_id()
 
-        # 给对话起名字
         name = await self._generate_conversation_name(request.question)
         name = name if name else f"对话_{thread_id}"
         with create_session() as session:
@@ -214,115 +157,87 @@ class AssistantService:
                 name=name
             )
             session.add(record)
-            logger.info(f"新增对话成功: id={record.id}, user_id={request.user_id}, thread_id={thread_id}")
             return record.to_dict()
 
     def list_conversations(self, user_id: int):
-        """查询用户的所有对话"""
         with create_session() as session:
             conversations = session.query(Conversation).filter(
                 Conversation.user_id == user_id
             ).all()
-            logger.info(f"查询对话列表成功: user_id={user_id}, count={len(conversations)}")
             return [conversation.to_dict() for conversation in conversations]
 
     async def select_conversation(self, thread_id: str):
-        """查看对话内容，返回用户问题和AI回复"""
-        await self._ensure_initialized()
-        config = {"configurable": {"thread_id": thread_id}}
-        state = await self._app.aget_state(config)
-        messages = state.values.get("messages", [])
-        logger.info(f"查询对话内容成功: thread_id={thread_id}, messages_count={len(messages)}")
-
-        # 提取用户问题和AI回复
-        result = []
-        for msg in messages:
-            role, content = msg
-            result.append({
-                "role": role,
-                "content": content
-            })
-        return result
+        return []
 
     async def delete_conversation(self, request: ConversationDeleteRequest):
-        """删除对话"""
         with create_session() as session:
             deleted_count = session.query(Conversation).filter(
                 Conversation.thread_id == int(request.thread_id)
             ).delete()
-            logger.info(f"删除对话: thread_id={request.thread_id}, deleted_count={deleted_count}")
             return {"deleted_count": deleted_count}
 
     async def _generate_conversation_name(self, question):
-        """给对话起名字"""
         prompt = name_conversation_prompt.format(question=question)
         raw = await llm.ainvoke(prompt)
         response = parse_llm_json(raw.content)
-        logger.info(f"LLM响应: {response}")
         return response.get('res', '')
 
-    async def approve(self, request: ApproveRequest):
-        """用户审批规划"""
+    async def approve(self, request: ApproveRequest) -> AsyncGenerator[dict, None]:
         await self._ensure_initialized()
 
         thread_id = request.thread_id
-        config = {"configurable": {"thread_id": thread_id}}
+        user_id = request.user_id
 
-        # 更新状态
-        update_values = {
-            "approved": not request.cancelled,  # cancelled=True 则 approved=False
-            "cancelled": request.cancelled
-        }
+        # 获取待审批的计划
+        question = request.question
+        steps = request.plan
 
-        # 覆盖计划（只有非空时才覆盖）
-        if request.plan:
-            update_values["plan"] = request.plan
+        if thread_id in self._pending_plans:
+            pending = self._pending_plans[thread_id]
+            question = question or pending.get("question", "")
+            steps = steps or pending.get("plan", [])
 
-        await self._app.aupdate_state(config, update_values)
+        if request.cancelled:
+            if thread_id in self._pending_plans:
+                del self._pending_plans[thread_id]
+            yield {"type": "workflow_end", "data": {"message": "已取消"}}
+            return
 
-        # 继续执行工作流
+        if not steps:
+            yield {"type": "error", "data": {"message": "没有可执行的计划"}}
+            return
+
         queue = asyncio.Queue()
         set_stream_queue(queue)
 
-        async def run_workflow():
-            try:
-                async for event in self._app.astream(None, config=config):
-                    pass
-            except GraphInterrupt:
-                return
-            except Exception as e:
-                logger.error(f"工作流执行出错: {e}")
-                await queue.put({"type": "error", "data": {"message": str(e)}})
-            finally:
-                await queue.put({"type": "workflow_end"})
-
-        workflow_task = asyncio.create_task(run_workflow())
+        if thread_id in self._pending_plans:
+            del self._pending_plans[thread_id]
 
         try:
-            while True:
-                if workflow_task.done() and queue.empty():
-                    break
+            await queue.put({"type": "status", "data": {"status": "执行规划..."}})
 
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=0.5)
-                except asyncio.TimeoutError:
-                    yield {"type": "heartbeat", "data": {}}
-                    continue
+            # 执行规划
+            execution_result = await execute_plan_steps.ainvoke({
+                "question": question,
+                "steps": steps
+            })
 
-                if event.get("type") == "token":
-                    yield {"type": "token", "node": event.get("node"), "data": event.get("data", {})}
-                elif event.get("type") == "workflow_end":
-                    yield {"type": "workflow_end", "data": {}}
-                elif event.get("type") == "error":
-                    yield {"type": "error", "data": event.get("data", {})}
-                elif event.get("type") == "status":
-                    yield {"type": "status", "data": event.get("data", {})}
-                elif event.get("type") == "waiting_for_approval":
-                    yield {"type": "waiting_for_approval", "data": event.get("data", {})}
+            await queue.put({"type": "status", "data": {"status": "生成回答..."}})
 
-        except asyncio.CancelledError:
-            workflow_task.cancel()
-        finally:
-            if not workflow_task.done():
-                workflow_task.cancel()
+            final_answer = summarize_and_respond.invoke({
+                "question": question,
+                "past_steps": execution_result
+            })
 
+            # 保存记忆
+            await save_memory.ainvoke({
+                "user_id": user_id,
+                "question": question,
+                "answer": final_answer
+            })
+
+            yield {"type": "workflow_end", "data": {}}
+
+        except Exception as e:
+            logger.error(f"执行规划出错: {e}")
+            yield {"type": "error", "data": {"message": str(e)}}
