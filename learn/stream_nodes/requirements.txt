@@ -1,6 +1,0 @@
-# LangGraph 节点级流式输出示例依赖
-# 基础依赖（项目已有）:
-# - langgraph>=0.2.0
-# - langchain-openai>=0.1.0
-# - fastapi>=0.104.0
-# - uvicorn[standard]>=0.24.0
